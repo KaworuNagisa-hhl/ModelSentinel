@@ -214,15 +214,19 @@ struct IslandView: View {
     private var modelVerificationLabel: String {
         switch store.snapshot.health {
         case .verified where store.snapshot.modelDetails?.responseModelID != nil:
-            "模型已验证"
+            "返回模型已验证"
         case .mismatch:
-            "模型不匹配"
+            "返回模型不匹配"
         case .warning:
-            "模型存疑"
+            "返回模型存疑"
         case .offline:
             "响应离线"
+        case .probing:
+            "返回模型验证中"
+        case _ where store.snapshot.modelDetails?.responseObserved == true:
+            "响应已捕获·待鉴别"
         default:
-            "模型未验证"
+            "返回模型待验证"
         }
     }
 
@@ -232,6 +236,8 @@ struct IslandView: View {
             .green
         case .mismatch, .offline:
             .red
+        case .probing:
+            .cyan
         default:
             .yellow
         }
@@ -261,8 +267,8 @@ struct IslandView: View {
                     value: store.snapshot.modelDetails?.requestedModelID ?? store.snapshot.claimedModel
                 )
                 modelDetail(
-                    label: "响应返回 ID",
-                    value: store.snapshot.modelDetails?.responseModelID ?? "等待首个响应",
+                    label: "服务端返回模型",
+                    value: responseModelText,
                     pending: store.snapshot.modelDetails?.responseModelID == nil
                 )
             }
@@ -322,6 +328,16 @@ struct IslandView: View {
         let reasoning = store.snapshot.modelDetails?.reasoningEffort ?? "待识别"
         let protocolName = store.snapshot.modelDetails?.wireAPI ?? "未声明"
         return "\(reasoning) · \(protocolName)"
+    }
+
+    private var responseModelText: String {
+        if let responseModelID = store.snapshot.modelDetails?.responseModelID {
+            return responseModelID
+        }
+        if store.snapshot.modelDetails?.responseObserved == true {
+            return "已捕获响应 · 未暴露模型 ID"
+        }
+        return store.snapshot.health == .probing ? "正在采集响应证据" : "等待下一次响应"
     }
 
     private var contextWindowText: String {

@@ -29,6 +29,7 @@ struct EvidenceMetric: Identifiable, Codable, Hashable, Sendable {
 struct ModelIdentityDetails: Codable, Equatable, Sendable {
     var requestedModelID: String?
     var responseModelID: String?
+    var responseObserved: Bool? = nil
     var behavioralMatch: String?
     var reasoningEffort: String?
     var wireAPI: String?

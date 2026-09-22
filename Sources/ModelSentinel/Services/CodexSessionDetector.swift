@@ -5,7 +5,13 @@ struct CodexSessionObservation: Sendable {
     let reasoningEffort: String?
     let contextWindowTokens: Int?
     let isTaskActive: Bool
+    let responseID: String?
+    let hasAssistantResponse: Bool
     let updatedAt: Date
+
+    var hasResponseEvidence: Bool {
+        responseID != nil || hasAssistantResponse
+    }
 }
 
 actor CodexSessionDetector {
@@ -31,13 +37,18 @@ actor CodexSessionDetector {
         var reasoningEffort: String?
         var contextWindowTokens: Int?
         var isTaskActive: Bool?
+        var responseID: String?
+        var hasAssistantResponse = false
+        var targetTurnID: String?
 
         for line in lines.reversed() {
             let isTurnContext = line.contains("\"type\":\"turn_context\"")
             let isTaskLifecycle = line.contains("\"type\":\"event_msg\"") &&
                 (line.contains("\"type\":\"task_started\"") ||
                     line.contains("\"type\":\"task_complete\""))
-            guard isTurnContext || isTaskLifecycle else { continue }
+            let isTokenUsage = line.contains("\"type\":\"token_usage_record\"")
+            let isResponseItem = line.contains("\"type\":\"response_item\"")
+            guard isTurnContext || isTaskLifecycle || isTokenUsage || isResponseItem else { continue }
             guard let data = line.data(using: .utf8),
                   let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   let payload = object["payload"] as? [String: Any] else {
@@ -46,21 +57,41 @@ actor CodexSessionDetector {
 
             let recordType = object["type"] as? String
             let payloadType = payload["type"] as? String
+            let metadata = payload["internal_chat_message_metadata_passthrough"] as? [String: Any]
+            let recordTurnID = payload["turn_id"] as? String ?? metadata?["turn_id"] as? String
+
+            if targetTurnID == nil, let recordTurnID {
+                targetTurnID = recordTurnID
+            }
+            if let targetTurnID, let recordTurnID, recordTurnID != targetTurnID {
+                continue
+            }
 
             if recordType == "turn_context" {
                 modelID = modelID ?? payload["model"] as? String
                 reasoningEffort = reasoningEffort ?? payload["effort"] as? String
             }
 
-            if recordType == "event_msg", payloadType == "task_started" {
+            if recordType == "event_msg", payloadType == "task_started", isTaskActive == nil {
                 contextWindowTokens = contextWindowTokens ?? payload["model_context_window"] as? Int
-                isTaskActive = isTaskActive ?? true
-            } else if recordType == "event_msg", payloadType == "task_complete" {
-                isTaskActive = isTaskActive ?? false
+                isTaskActive = true
+            } else if recordType == "event_msg", payloadType == "task_complete", isTaskActive == nil {
+                isTaskActive = false
+            }
+
+            if recordType == "token_usage_record" {
+                responseID = responseID ?? payload["response_id"] as? String
+            }
+
+            if recordType == "response_item",
+               payloadType == "message",
+               payload["role"] as? String == "assistant" {
+                hasAssistantResponse = true
             }
 
             if modelID != nil, reasoningEffort != nil,
-               contextWindowTokens != nil, isTaskActive != nil {
+               contextWindowTokens != nil, isTaskActive != nil,
+               (isTaskActive == true || responseID != nil || hasAssistantResponse) {
                 break
             }
         }
@@ -71,6 +102,8 @@ actor CodexSessionDetector {
             reasoningEffort: reasoningEffort,
             contextWindowTokens: contextWindowTokens,
             isTaskActive: isTaskActive ?? false,
+            responseID: responseID,
+            hasAssistantResponse: hasAssistantResponse,
             updatedAt: session.modificationDate
         )
     }

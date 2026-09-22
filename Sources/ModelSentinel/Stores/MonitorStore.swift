@@ -201,18 +201,28 @@ final class MonitorStore: ObservableObject {
             details.requestedModelID = observation.modelID ?? details.requestedModelID
             details.reasoningEffort = observation.reasoningEffort ?? details.reasoningEffort
             details.contextWindowTokens = observation.contextWindowTokens ?? details.contextWindowTokens
+            details.responseObserved = observation.hasResponseEvidence
             snapshot.modelDetails = details
         }
         if let modelID = observation.modelID {
             snapshot.claimedModel = modelID
         }
-        snapshot.note = observation.isTaskActive
-            ? "Codex 正在处理请求 · 会话模型 \(observation.modelID ?? "待识别")"
-            : "Codex 正在运行 · 最近会话模型 \(observation.modelID ?? "待识别")"
+        if observation.isTaskActive {
+            snapshot.health = .probing
+            snapshot.matchedFamily = "正在采集本轮响应证据"
+            snapshot.note = "Codex 正在处理请求 · 自动验证会话模型 \(observation.modelID ?? "待识别")"
+        } else if observation.hasResponseEvidence {
+            snapshot.health = .configured
+            snapshot.matchedFamily = "本轮响应已捕获 · 返回模型待鉴别"
+            snapshot.note = "已捕获 Codex 真实响应 · 服务端未暴露独立模型 ID"
+        } else {
+            snapshot.health = .configured
+            snapshot.note = "Codex 正在运行 · 等待下一次请求自动验证"
+        }
         if snapshot.evidence.indices.contains(3) {
             snapshot.evidence[3] = EvidenceMetric(
-                name: "会话",
-                value: observation.modelID == nil ? 0 : 1
+                name: "响应",
+                value: observation.hasResponseEvidence ? 1 : (observation.isTaskActive ? 0.5 : 0)
             )
         }
         snapshot.updatedAt = observation.updatedAt
