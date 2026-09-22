@@ -13,6 +13,7 @@ final class FloatingIslandController: NSObject {
     private let hoverSensor = NotchHoverSensorView(frame: .zero)
     private var cancellables = Set<AnyCancellable>()
     private var hoverTask: Task<Void, Never>?
+    private var frameAnimationTask: Task<Void, Never>?
     private var isSensorHovered = false
     private var isContentHovered = false
     private let pinsExpandedForPreview = ProcessInfo.processInfo.arguments.contains("--expanded")
@@ -46,7 +47,9 @@ final class FloatingIslandController: NSObject {
             onToggle: { [weak self] in self?.toggleExpanded() },
             onHoverChange: { [weak self] inside in self?.handleContentHover(inside) }
         )
-        panel.contentView = NSHostingView(rootView: view)
+        let hostingView = NSHostingView(rootView: view)
+        hostingView.sizingOptions = []
+        panel.contentView = hostingView
 
         updatePresentation(animated: false)
         observeScreenChanges()
@@ -55,6 +58,7 @@ final class FloatingIslandController: NSObject {
 
     deinit {
         hoverTask?.cancel()
+        frameAnimationTask?.cancel()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -65,6 +69,7 @@ final class FloatingIslandController: NSObject {
 
     func hide() {
         store.isVisible = false
+        frameAnimationTask?.cancel()
         panel.orderOut(nil)
         sensorPanel.orderOut(nil)
     }
@@ -92,7 +97,6 @@ final class FloatingIslandController: NSObject {
         panel.hidesOnDeactivate = false
         panel.isMovable = false
         panel.isMovableByWindowBackground = false
-        panel.animationBehavior = .none
         return panel
     }
 
@@ -134,15 +138,37 @@ final class FloatingIslandController: NSObject {
     }
 
     private func setPanelFrame(_ frame: NSRect, animated: Bool) {
+        frameAnimationTask?.cancel()
         guard animated, panel.isVisible else {
             panel.setFrame(frame, display: true)
             return
         }
 
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.3
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            panel.animator().setFrame(frame, display: true)
+        let start = panel.frame
+        guard start != frame else { return }
+        let frameCount = 24
+        frameAnimationTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            for step in 1...frameCount {
+                do {
+                    try await Task.sleep(for: .milliseconds(16))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                let progress = CGFloat(step) / CGFloat(frameCount)
+                let eased = progress < 0.5
+                    ? 4 * progress * progress * progress
+                    : 1 - pow(-2 * progress + 2, 3) / 2
+                let current = NSRect(
+                    x: start.origin.x + (frame.origin.x - start.origin.x) * eased,
+                    y: start.origin.y + (frame.origin.y - start.origin.y) * eased,
+                    width: start.width + (frame.width - start.width) * eased,
+                    height: start.height + (frame.height - start.height) * eased
+                )
+                panel.setFrame(current, display: true)
+            }
+            panel.setFrame(frame, display: true)
         }
     }
 

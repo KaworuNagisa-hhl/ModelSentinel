@@ -7,17 +7,17 @@ struct IslandView: View {
 
     var body: some View {
         Group {
-            if store.isExpanded {
+            if store.displayLayout.isNotched {
+                notchedContent
+            } else if store.isExpanded {
                 expandedContent
                     .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
-            } else if store.displayLayout.isNotched {
-                notchedIdleContent
-                    .transition(.opacity)
-            } else if !store.displayLayout.isNotched {
+            } else {
                 floatingIdleContent
                     .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .foregroundStyle(.white)
         .contentShape(Rectangle())
         .onTapGesture(perform: onToggle)
@@ -30,34 +30,66 @@ struct IslandView: View {
         .animation(.easeInOut(duration: 0.22), value: store.snapshot.health)
     }
 
-    private var notchedIdleContent: some View {
-        HStack(spacing: 0) {
+    private var notchedContent: some View {
+        ZStack(alignment: .topLeading) {
+            notchedSurface
+
+            if store.isExpanded {
+                expandedContent
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity.combined(with: .offset(y: -8)),
+                            removal: .opacity
+                        )
+                    )
+            } else {
+                Color.clear
+                    .frame(
+                        width: store.displayLayout.leftWingWidth,
+                        height: store.displayLayout.compactHeight
+                    )
+                    .accessibilityLabel("收起状态：\(compactStatusLabel)")
+            }
+
             StatusDot(
                 health: store.snapshot.health,
                 tint: store.snapshot.health.compactIndicatorColor
             )
             .frame(width: 30, height: 30)
-
-            Spacer(minLength: 0)
+            .offset(
+                x: 16,
+                y: store.isExpanded
+                    ? store.displayLayout.compactHeight
+                    : (store.displayLayout.compactHeight - 30) / 2
+            )
+            .zIndex(2)
         }
-        .padding(.leading, 16)
         .frame(
-            width: store.displayLayout.leftWingWidth,
-            height: store.displayLayout.compactHeight
+            width: store.isExpanded ? 372 : store.displayLayout.leftWingWidth,
+            height: store.isExpanded
+                ? 264 + store.displayLayout.compactHeight
+                : store.displayLayout.compactHeight,
+            alignment: .topLeading
         )
-            .background {
-                UnevenRoundedRectangle(
-                    cornerRadii: .init(
-                        topLeading: 0,
-                        bottomLeading: 16,
-                        bottomTrailing: 0,
-                        topTrailing: 0
-                    ),
-                    style: .continuous
-                )
-                .fill(.black)
-            }
-            .accessibilityLabel("收起状态：\(compactStatusLabel)")
+    }
+
+    private var notchedSurface: some View {
+        let shape = UnevenRoundedRectangle(
+            cornerRadii: .init(
+                topLeading: 0,
+                bottomLeading: store.isExpanded ? 25 : 16,
+                bottomTrailing: store.isExpanded ? 25 : 0,
+                topTrailing: 0
+            ),
+            style: .continuous
+        )
+        return glassSurface(shape: shape)
+            .frame(
+                width: store.isExpanded ? 372 : store.displayLayout.leftWingWidth,
+                height: store.isExpanded
+                    ? 264 + store.displayLayout.compactHeight
+                    : store.displayLayout.compactHeight
+            )
     }
 
     private var compactStatusLabel: String {
@@ -125,16 +157,26 @@ struct IslandView: View {
                 : 276,
             alignment: .top
         )
-        .background(expandedSurface)
+        .background {
+            if !store.displayLayout.isNotched {
+                expandedSurface
+            }
+        }
     }
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(systemName: store.snapshot.health.symbol)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(store.snapshot.health.color)
+            Group {
+                if store.displayLayout.isNotched {
+                    Color.clear
+                } else {
+                    StatusDot(
+                        health: store.snapshot.health,
+                        tint: store.snapshot.health.compactIndicatorColor
+                    )
+                }
+            }
                 .frame(width: 30, height: 30)
-                .background(store.snapshot.health.color.opacity(0.13), in: Circle())
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(statusTitle)
