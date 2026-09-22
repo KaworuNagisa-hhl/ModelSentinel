@@ -207,14 +207,16 @@ final class MonitorStore: ObservableObject {
         if let modelID = observation.modelID {
             snapshot.claimedModel = modelID
         }
-        if observation.isTaskActive {
-            snapshot.health = .probing
-            snapshot.matchedFamily = "正在采集本轮响应证据"
-            snapshot.note = "Codex 正在处理请求 · 自动验证会话模型 \(observation.modelID ?? "待识别")"
-        } else if observation.hasResponseEvidence {
+        if observation.hasResponseEvidence {
             snapshot.health = .configured
-            snapshot.matchedFamily = "本轮响应已捕获 · 返回模型待鉴别"
-            snapshot.note = "已捕获 Codex 真实响应 · 服务端未暴露独立模型 ID"
+            snapshot.matchedFamily = "最近响应已捕获 · 返回模型待鉴别"
+            snapshot.note = observation.isTaskActive
+                ? "最近一轮响应已捕获 · 当前请求继续采集"
+                : "最近一轮响应已捕获 · 服务端未暴露独立模型 ID"
+        } else if observation.isTaskActive {
+            snapshot.health = .probing
+            snapshot.matchedFamily = "正在采集首轮响应证据"
+            snapshot.note = "Codex 正在处理请求 · 自动验证会话模型 \(observation.modelID ?? "待识别")"
         } else {
             snapshot.health = .configured
             snapshot.note = "Codex 正在运行 · 等待下一次请求自动验证"

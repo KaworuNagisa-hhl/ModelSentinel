@@ -21,6 +21,16 @@ actor CodexSessionDetector {
     private let sessionsDirectory: URL
     private let maximumTailBytes: UInt64 = 8 * 1024 * 1024
 
+    private struct TurnEvidence {
+        var lastRecordIndex = 0
+        var modelID: String?
+        var reasoningEffort: String?
+        var contextWindowTokens: Int?
+        var isTaskActive: Bool?
+        var responseID: String?
+        var hasAssistantResponse = false
+    }
+
     init(fileManager: FileManager = .default, homeDirectory: URL? = nil) {
         self.fileManager = fileManager
         self.sessionsDirectory = (homeDirectory ?? fileManager.homeDirectoryForCurrentUser)
@@ -33,15 +43,9 @@ actor CodexSessionDetector {
             return nil
         }
 
-        var modelID: String?
-        var reasoningEffort: String?
-        var contextWindowTokens: Int?
-        var isTaskActive: Bool?
-        var responseID: String?
-        var hasAssistantResponse = false
-        var targetTurnID: String?
+        var turns: [String: TurnEvidence] = [:]
 
-        for line in lines.reversed() {
+        for (index, line) in lines.enumerated() {
             let isTurnContext = line.contains("\"type\":\"turn_context\"")
             let isTaskLifecycle = line.contains("\"type\":\"event_msg\"") &&
                 (line.contains("\"type\":\"task_started\"") ||
@@ -58,52 +62,53 @@ actor CodexSessionDetector {
             let recordType = object["type"] as? String
             let payloadType = payload["type"] as? String
             let metadata = payload["internal_chat_message_metadata_passthrough"] as? [String: Any]
-            let recordTurnID = payload["turn_id"] as? String ?? metadata?["turn_id"] as? String
-
-            if targetTurnID == nil, let recordTurnID {
-                targetTurnID = recordTurnID
-            }
-            if let targetTurnID, let recordTurnID, recordTurnID != targetTurnID {
+            guard let turnID = payload["turn_id"] as? String ?? metadata?["turn_id"] as? String else {
                 continue
             }
+            var evidence = turns[turnID] ?? TurnEvidence()
+            evidence.lastRecordIndex = index
 
             if recordType == "turn_context" {
-                modelID = modelID ?? payload["model"] as? String
-                reasoningEffort = reasoningEffort ?? payload["effort"] as? String
+                evidence.modelID = payload["model"] as? String ?? evidence.modelID
+                evidence.reasoningEffort = payload["effort"] as? String ?? evidence.reasoningEffort
             }
 
-            if recordType == "event_msg", payloadType == "task_started", isTaskActive == nil {
-                contextWindowTokens = contextWindowTokens ?? payload["model_context_window"] as? Int
-                isTaskActive = true
-            } else if recordType == "event_msg", payloadType == "task_complete", isTaskActive == nil {
-                isTaskActive = false
+            if recordType == "event_msg", payloadType == "task_started" {
+                evidence.contextWindowTokens = payload["model_context_window"] as? Int
+                    ?? evidence.contextWindowTokens
+                evidence.isTaskActive = true
+            } else if recordType == "event_msg", payloadType == "task_complete" {
+                evidence.isTaskActive = false
             }
 
             if recordType == "token_usage_record" {
-                responseID = responseID ?? payload["response_id"] as? String
+                evidence.responseID = payload["response_id"] as? String ?? evidence.responseID
             }
 
             if recordType == "response_item",
                payloadType == "message",
                payload["role"] as? String == "assistant" {
-                hasAssistantResponse = true
+                evidence.hasAssistantResponse = true
             }
-
-            if modelID != nil, reasoningEffort != nil,
-               contextWindowTokens != nil, isTaskActive != nil,
-               (isTaskActive == true || responseID != nil || hasAssistantResponse) {
-                break
-            }
+            turns[turnID] = evidence
         }
 
-        guard modelID != nil || isTaskActive != nil else { return nil }
+        let latestTurn = turns.values.max { $0.lastRecordIndex < $1.lastRecordIndex }
+        let latestCompletedTurn = turns.values
+            .filter { $0.isTaskActive == false }
+            .max { $0.lastRecordIndex < $1.lastRecordIndex }
+        guard let latestTurn else { return nil }
+
+        let completedEvidence = latestCompletedTurn ?? (
+            latestTurn.isTaskActive == false ? latestTurn : nil
+        )
         return CodexSessionObservation(
-            modelID: modelID,
-            reasoningEffort: reasoningEffort,
-            contextWindowTokens: contextWindowTokens,
-            isTaskActive: isTaskActive ?? false,
-            responseID: responseID,
-            hasAssistantResponse: hasAssistantResponse,
+            modelID: latestTurn.modelID ?? completedEvidence?.modelID,
+            reasoningEffort: latestTurn.reasoningEffort ?? completedEvidence?.reasoningEffort,
+            contextWindowTokens: latestTurn.contextWindowTokens ?? completedEvidence?.contextWindowTokens,
+            isTaskActive: latestTurn.isTaskActive ?? false,
+            responseID: completedEvidence?.responseID,
+            hasAssistantResponse: completedEvidence?.hasAssistantResponse ?? false,
             updatedAt: session.modificationDate
         )
     }
@@ -128,7 +133,7 @@ actor CodexSessionDetector {
                 options: [.skipsHiddenFiles]
             ) else { continue }
 
-            for url in urls where url.pathExtension == "jsonl" {
+            for url in urls where url.pathExtension == "jsonl" && isPrimarySession(at: url) {
                 guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey]),
                       let modificationDate = values.contentModificationDate else { continue }
                 candidates.append((url, modificationDate))
@@ -136,6 +141,30 @@ actor CodexSessionDetector {
         }
 
         return candidates.max { $0.1 < $1.1 }
+    }
+
+    private func isPrimarySession(at url: URL) -> Bool {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return true }
+        defer { try? handle.close() }
+        guard let data = try? handle.read(upToCount: 512 * 1024),
+              let newline = data.firstIndex(of: 0x0A),
+              let object = try? JSONSerialization.jsonObject(with: data[..<newline]) as? [String: Any],
+              object["type"] as? String == "session_meta",
+              let payload = object["payload"] as? [String: Any] else {
+            return true
+        }
+
+        if payload["parent_thread_id"] != nil {
+            return false
+        }
+        if let source = payload["source"] as? [String: Any], source["subagent"] != nil {
+            return false
+        }
+        if let threadSource = payload["thread_source"] as? String,
+           threadSource != "user" {
+            return false
+        }
+        return true
     }
 
     private func tailLines(at url: URL) -> [Substring]? {
