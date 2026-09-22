@@ -224,7 +224,7 @@ struct IslandView: View {
         case .probing:
             "返回模型验证中"
         case _ where store.snapshot.modelDetails?.responseObserved == true:
-            "响应已捕获·待鉴别"
+            "模型字段未提供"
         default:
             "返回模型待验证"
         }
@@ -335,7 +335,7 @@ struct IslandView: View {
             return responseModelID
         }
         if store.snapshot.modelDetails?.responseObserved == true {
-            return "已捕获响应 · 未暴露模型 ID"
+            return "真实响应已确认 · 无模型字段"
         }
         return store.snapshot.health == .probing ? "正在采集响应证据" : "等待下一次响应"
     }

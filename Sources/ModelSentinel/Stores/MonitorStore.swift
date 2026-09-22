@@ -209,10 +209,10 @@ final class MonitorStore: ObservableObject {
         }
         if observation.hasResponseEvidence {
             snapshot.health = .configured
-            snapshot.matchedFamily = "最近响应已捕获 · 返回模型待鉴别"
+            snapshot.matchedFamily = "真实响应已确认 · 服务端未提供模型字段"
             snapshot.note = observation.isTaskActive
-                ? "最近一轮响应已捕获 · 当前请求继续采集"
-                : "最近一轮响应已捕获 · 服务端未暴露独立模型 ID"
+                ? "最近一轮响应已确认 · 当前请求继续采集"
+                : "最近一轮响应已确认 · 服务端未提供模型字段"
         } else if observation.isTaskActive {
             snapshot.health = .probing
             snapshot.matchedFamily = "正在采集首轮响应证据"
