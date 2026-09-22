@@ -214,7 +214,7 @@ struct IslandView: View {
     private var modelVerificationLabel: String {
         switch store.snapshot.health {
         case .verified where store.snapshot.modelDetails?.responseModelID != nil:
-            "返回模型已验证"
+            "响应声明一致"
         case .mismatch:
             "返回模型不匹配"
         case .warning:

@@ -4,16 +4,12 @@ import SwiftUI
 struct ModelSentinelApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = MonitorStore.shared
+    @StateObject private var proxyStore = ProxyStore.shared
 
     var body: some Scene {
         MenuBarExtra {
             Button("展开状态岛") {
                 store.showExpanded()
-                appDelegate.showIsland()
-            }
-
-            Button("运行演示探针") {
-                store.runDemoProbe()
                 appDelegate.showIsland()
             }
 
@@ -41,9 +37,11 @@ struct ModelSentinelApp: App {
                 }
             }
 
-            Button("模拟线路降级") {
-                store.simulateMismatch()
-                appDelegate.showIsland()
+            Divider()
+
+            Text("本地代理：\(proxyStore.runtimeState.label)")
+            SettingsLink {
+                Text("代理与鉴别设置…")
             }
 
             Divider()
@@ -72,5 +70,9 @@ struct ModelSentinelApp: App {
             Image(systemName: store.snapshot.health.symbol)
         }
         .menuBarExtraStyle(.menu)
+
+        Settings {
+            ProxySettingsView(store: proxyStore)
+        }
     }
 }
