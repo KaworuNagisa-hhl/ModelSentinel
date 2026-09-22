@@ -189,17 +189,51 @@ struct IslandView: View {
 
             Spacer(minLength: 8)
 
-            HStack(alignment: .firstTextBaseline, spacing: 1) {
-                Text("\(Int((store.snapshot.confidence * 100).rounded()))")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                Text("%")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .trailing, spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text("来源可信度")
+                        .font(.system(size: 8.5, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    Text(store.snapshot.confidence.percentText)
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                }
+                Text(modelVerificationLabel)
+                    .font(.system(size: 8.5, weight: .semibold))
+                    .foregroundStyle(modelVerificationColor)
             }
             .padding(.horizontal, 10)
-            .frame(height: 30)
-            .background(.white.opacity(0.07), in: Capsule())
+            .frame(minWidth: 94, minHeight: 36)
+            .background(
+                .white.opacity(0.07),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+        }
+    }
+
+    private var modelVerificationLabel: String {
+        switch store.snapshot.health {
+        case .verified where store.snapshot.modelDetails?.responseModelID != nil:
+            "模型已验证"
+        case .mismatch:
+            "模型不匹配"
+        case .warning:
+            "模型存疑"
+        case .offline:
+            "响应离线"
+        default:
+            "模型未验证"
+        }
+    }
+
+    private var modelVerificationColor: Color {
+        switch store.snapshot.health {
+        case .verified where store.snapshot.modelDetails?.responseModelID != nil:
+            .green
+        case .mismatch, .offline:
+            .red
+        default:
+            .yellow
         }
     }
 

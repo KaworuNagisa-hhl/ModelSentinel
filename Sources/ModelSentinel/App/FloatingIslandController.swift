@@ -234,9 +234,9 @@ final class FloatingIslandController: NSObject {
             centerX: screen.frame.midX,
             expandedTopY: screen.frame.maxY,
             sensorFrame: NSRect(
-                x: screen.frame.midX - notchWidth / 2,
+                x: compactLeftX,
                 y: menuBarBottomY,
-                width: notchWidth,
+                width: rightArea.minX - compactLeftX,
                 height: sensorHeight
             ),
             compactStatusFrame: NSRect(

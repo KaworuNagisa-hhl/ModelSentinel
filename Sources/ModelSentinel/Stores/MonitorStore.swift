@@ -189,7 +189,7 @@ final class MonitorStore: ObservableObject {
         snapshot.evidence = [
             EvidenceMetric(name: route.client.isRunning ? "运行" : "客户端", value: route.client.isRunning ? 1 : 0.72),
             EvidenceMetric(name: "配置", value: route.client.hasConfiguration ? 1 : 0.55),
-            EvidenceMetric(name: "线路", value: route.origin.confidence),
+            EvidenceMetric(name: "来源", value: route.origin.confidence),
             EvidenceMetric(name: "模型", value: route.modelDetails.responseModelID == nil ? 0 : 1)
         ]
         snapshot.updatedAt = .now
