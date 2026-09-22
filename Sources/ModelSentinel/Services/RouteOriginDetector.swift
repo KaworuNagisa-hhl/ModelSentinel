@@ -12,11 +12,38 @@ actor RouteOriginDetector {
     }
 
     func detectEnvironment(runtime: AIClientRuntimeContext) -> ClientEnvironmentDetection {
+        let cliProcesses = CLIProcessDetector().scan().filter { !$0.isInternalHelper }
         let probes = [
-            detectCodex(runtime: runtime),
+            detectCodexDesktop(runtime: runtime),
+            detectCodexCLI(runtime: runtime, processes: cliProcesses),
             detectChatGPT(runtime: runtime),
             detectClaudeDesktop(runtime: runtime),
-            detectClaudeCode(),
+            detectClaudeCode(runtime: runtime, processes: cliProcesses),
+            detectGenericCLI(
+                runtime: runtime,
+                processes: cliProcesses,
+                specification: .gemini(homeDirectory: homeDirectory)
+            ),
+            detectGenericCLI(
+                runtime: runtime,
+                processes: cliProcesses,
+                specification: .aider(homeDirectory: homeDirectory)
+            ),
+            detectGenericCLI(
+                runtime: runtime,
+                processes: cliProcesses,
+                specification: .openCode(homeDirectory: homeDirectory)
+            ),
+            detectGenericCLI(
+                runtime: runtime,
+                processes: cliProcesses,
+                specification: .amp(homeDirectory: homeDirectory)
+            ),
+            detectGenericCLI(
+                runtime: runtime,
+                processes: cliProcesses,
+                specification: .qwenCode(homeDirectory: homeDirectory)
+            ),
             detectCursor(runtime: runtime),
             detectWindsurf(runtime: runtime),
             detectVisualStudioCode(runtime: runtime),
@@ -35,15 +62,15 @@ actor RouteOriginDetector {
         codexRouteAndModel().model
     }
 
-    private func detectCodex(runtime: AIClientRuntimeContext) -> ClientRouteDetection? {
+    private func detectCodexDesktop(runtime: AIClientRuntimeContext) -> ClientRouteDetection? {
         let bundleFragments = ["openai.codex", ".codex"]
         let nameFragments = ["Codex"]
         let configURL = codexHomeURL().appendingPathComponent("config.toml")
         let hasConfiguration = fileManager.fileExists(atPath: configURL.path)
         let isInstalled = hasInstalledApplication(named: "Codex.app") ||
-            executableExists(at: ["/opt/homebrew/bin/codex", "/usr/local/bin/codex"])
+            hasInstalledApplication(named: "ChatGPT.app")
         let isRunning = runtime.isRunning(bundleFragments: bundleFragments, nameFragments: nameFragments)
-        guard isInstalled || isRunning || hasConfiguration else { return nil }
+        guard isInstalled || isRunning else { return nil }
 
         var evidence = clientEvidence(
             isInstalled: isInstalled,
@@ -58,7 +85,7 @@ actor RouteOriginDetector {
         let resolved = codexRouteAndModel()
         return ClientRouteDetection(
             client: AIClientDetection(
-                id: "codex",
+                id: "codex-desktop",
                 kind: .codex,
                 displayName: "Codex",
                 surface: .desktopApp,
@@ -68,6 +95,38 @@ actor RouteOriginDetector {
                 hasConfiguration: hasConfiguration,
                 integrations: [],
                 evidence: evidence
+            ),
+            origin: resolved.origin,
+            modelDetails: resolved.model
+        )
+    }
+
+    private func detectCodexCLI(
+        runtime: AIClientRuntimeContext,
+        processes: [CLIProcessObservation]
+    ) -> ClientRouteDetection? {
+        let process = preferredProcess(id: "codex-cli", runtime: runtime, processes: processes)
+        let configURL = codexHomeURL().appendingPathComponent("config.toml")
+        let hasConfiguration = fileManager.fileExists(atPath: configURL.path)
+        let isInstalled = executableExists(at: [
+            "/opt/homebrew/bin/codex",
+            "/usr/local/bin/codex",
+            homeDirectory.appendingPathComponent(".local/bin/codex").path,
+            "/Applications/ChatGPT.app/Contents/Resources/codex"
+        ])
+        guard isInstalled || hasConfiguration || process != nil else { return nil }
+
+        let resolved = codexRouteAndModel()
+        return ClientRouteDetection(
+            client: commandLineClient(
+                id: "codex-cli",
+                kind: .codex,
+                displayName: "Codex CLI",
+                isInstalled: isInstalled,
+                hasConfiguration: hasConfiguration,
+                configurationName: "~/.codex/config.toml",
+                process: process,
+                runtime: runtime
             ),
             origin: resolved.origin,
             modelDetails: resolved.model
@@ -134,7 +193,11 @@ actor RouteOriginDetector {
         )
     }
 
-    private func detectClaudeCode() -> ClientRouteDetection? {
+    private func detectClaudeCode(
+        runtime: AIClientRuntimeContext,
+        processes: [CLIProcessObservation]
+    ) -> ClientRouteDetection? {
+        let runningProcess = preferredProcess(id: "claude-code", runtime: runtime, processes: processes)
         let userSettingsURL = homeDirectory.appendingPathComponent(".claude/settings.json")
         let userStateURL = homeDirectory.appendingPathComponent(".claude.json")
         let managedSettingsURL = URL(fileURLWithPath: "/Library/Application Support/ClaudeCode/managed-settings.json")
@@ -146,7 +209,7 @@ actor RouteOriginDetector {
             "/usr/local/bin/claude",
             homeDirectory.appendingPathComponent(".local/bin/claude").path
         ])
-        guard isInstalled || hasConfiguration else { return nil }
+        guard isInstalled || hasConfiguration || runningProcess != nil else { return nil }
 
         var mergedEnvironment: [String: String] = [:]
         var selectedModel: String?
@@ -208,22 +271,15 @@ actor RouteOriginDetector {
         }
 
         return ClientRouteDetection(
-            client: AIClientDetection(
+            client: commandLineClient(
                 id: "claude-code",
                 kind: .claudeCode,
                 displayName: "Claude Code",
-                surface: .commandLine,
                 isInstalled: isInstalled,
-                isRunning: false,
-                isFrontmost: false,
                 hasConfiguration: hasConfiguration,
-                integrations: [],
-                evidence: clientEvidence(
-                    isInstalled: isInstalled,
-                    isRunning: false,
-                    hasConfiguration: hasConfiguration,
-                    configurationName: "~/.claude/settings.json"
-                )
+                configurationName: "~/.claude/settings.json",
+                process: runningProcess,
+                runtime: runtime
             ),
             origin: origin,
             modelDetails: ModelIdentityDetails(
@@ -425,6 +481,128 @@ actor RouteOriginDetector {
             ),
             providerID: id
         )
+    }
+
+    private func detectGenericCLI(
+        runtime: AIClientRuntimeContext,
+        processes: [CLIProcessObservation],
+        specification: CLIClientSpecification
+    ) -> ClientRouteDetection? {
+        let process = preferredProcess(
+            id: specification.id,
+            runtime: runtime,
+            processes: processes
+        )
+        let configurationURL = specification.configurationURLs.first {
+            fileManager.fileExists(atPath: $0.path)
+        }
+        let hasConfiguration = configurationURL != nil
+        let isInstalled = executableExists(at: specification.executablePaths)
+        guard process != nil || isInstalled || hasConfiguration else { return nil }
+
+        let configurationText = configurationURL.flatMap {
+            try? String(contentsOf: $0, encoding: .utf8)
+        }
+        let requestedModel = configurationText.flatMap {
+            jsonLikeStringValue(for: "model", in: $0)
+                ?? yamlLikeValue(for: "model", in: $0)
+        }
+        let baseURL = configurationText.flatMap {
+            jsonLikeStringValue(for: "baseURL", in: $0)
+                ?? jsonLikeStringValue(for: "base_url", in: $0)
+                ?? jsonLikeStringValue(for: "apiBase", in: $0)
+                ?? yamlLikeValue(for: "openai-api-base", in: $0)
+                ?? yamlLikeValue(for: "anthropic-api-base", in: $0)
+        }
+
+        let origin = baseURL.map {
+            classifyEndpoint(
+                $0,
+                declaredName: specification.displayName,
+                credentialKind: .providerAPIKey
+            )
+        } ?? RouteOrigin(
+            kind: .managedService,
+            credentialKind: .unknown,
+            displayName: "\(specification.displayName) · Provider 待响应确认",
+            host: nil,
+            confidence: process == nil ? 0.38 : 0.52,
+            evidence: [
+                "已识别 CLI 进程或本机配置",
+                "未发现可验证的 Base URL；实际模型等待响应证据"
+            ]
+        )
+
+        return ClientRouteDetection(
+            client: commandLineClient(
+                id: specification.id,
+                kind: specification.kind,
+                displayName: specification.displayName,
+                isInstalled: isInstalled,
+                hasConfiguration: hasConfiguration,
+                configurationName: specification.configurationLabel,
+                process: process,
+                runtime: runtime
+            ),
+            origin: origin,
+            modelDetails: ModelIdentityDetails(
+                requestedModelID: requestedModel,
+                responseModelID: nil,
+                behavioralMatch: nil,
+                reasoningEffort: nil,
+                wireAPI: specification.wireAPI,
+                providerID: specification.providerID,
+                contextWindowTokens: nil
+            )
+        )
+    }
+
+    private func commandLineClient(
+        id: String,
+        kind: AIClientKind,
+        displayName: String,
+        isInstalled: Bool,
+        hasConfiguration: Bool,
+        configurationName: String,
+        process: CLIProcessObservation?,
+        runtime: AIClientRuntimeContext
+    ) -> AIClientDetection {
+        var evidence = clientEvidence(
+            isInstalled: isInstalled,
+            isRunning: process != nil,
+            hasConfiguration: hasConfiguration,
+            configurationName: configurationName
+        )
+        if let process {
+            evidence.append("CLI PID: \(process.processID)")
+            if let hostApplication = process.hostApplication {
+                evidence.append("宿主：\(hostApplication)")
+            }
+        }
+
+        return AIClientDetection(
+            id: id,
+            kind: kind,
+            displayName: displayName,
+            surface: .commandLine,
+            isInstalled: isInstalled,
+            isRunning: process != nil,
+            isFrontmost: process != nil && runtime.isFrontmostHost(process?.hostApplication),
+            hasConfiguration: hasConfiguration,
+            integrations: [],
+            evidence: evidence,
+            processID: process?.processID,
+            hostApplication: process?.hostApplication
+        )
+    }
+
+    private func preferredProcess(
+        id: String,
+        runtime: AIClientRuntimeContext,
+        processes: [CLIProcessObservation]
+    ) -> CLIProcessObservation? {
+        let matching = processes.filter { $0.executableID == id }
+        return matching.first(where: { runtime.isFrontmostHost($0.hostApplication) }) ?? matching.first
     }
 
     private func managedClientProbe(
@@ -890,6 +1068,17 @@ actor RouteOriginDetector {
         return String(text[range])
     }
 
+    private func yamlLikeValue(for key: String, in text: String) -> String? {
+        let escapedKey = NSRegularExpression.escapedPattern(for: key)
+        let pattern = #"(?m)^\s*"# + escapedKey + #"\s*:\s*[\"']?([^\"'\n#]+)"#
+        guard let expression = try? NSRegularExpression(pattern: pattern),
+              let match = expression.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range(at: 1), in: text) else {
+            return nil
+        }
+        return text[range].trimmingCharacters(in: .whitespaces)
+    }
+
     private func scanCodexConfig(at url: URL) -> CodexConfigScan {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else {
             return CodexConfigScan()
@@ -977,4 +1166,94 @@ private struct ProviderScan {
     var wireAPI: String?
     var requiresOpenAIAuth = false
     var usesEnvironmentKey = false
+}
+
+private struct CLIClientSpecification {
+    let id: String
+    let kind: AIClientKind
+    let displayName: String
+    let providerID: String?
+    let wireAPI: String?
+    let configurationURLs: [URL]
+    let configurationLabel: String
+    let executablePaths: [String]
+
+    static func gemini(homeDirectory: URL) -> Self {
+        Self(
+            id: "gemini-cli",
+            kind: .geminiCLI,
+            displayName: "Gemini CLI",
+            providerID: "google-gemini",
+            wireAPI: nil,
+            configurationURLs: [homeDirectory.appendingPathComponent(".gemini/settings.json")],
+            configurationLabel: "~/.gemini/settings.json",
+            executablePaths: commonExecutablePaths(name: "gemini", homeDirectory: homeDirectory)
+        )
+    }
+
+    static func aider(homeDirectory: URL) -> Self {
+        Self(
+            id: "aider",
+            kind: .aider,
+            displayName: "Aider",
+            providerID: nil,
+            wireAPI: nil,
+            configurationURLs: [homeDirectory.appendingPathComponent(".aider.conf.yml")],
+            configurationLabel: "~/.aider.conf.yml",
+            executablePaths: commonExecutablePaths(name: "aider", homeDirectory: homeDirectory)
+                + commonExecutablePaths(name: "aider-chat", homeDirectory: homeDirectory)
+        )
+    }
+
+    static func openCode(homeDirectory: URL) -> Self {
+        Self(
+            id: "opencode",
+            kind: .openCode,
+            displayName: "OpenCode",
+            providerID: nil,
+            wireAPI: nil,
+            configurationURLs: [
+                homeDirectory.appendingPathComponent(".config/opencode/opencode.json"),
+                homeDirectory.appendingPathComponent(".config/opencode/opencode.jsonc")
+            ],
+            configurationLabel: "~/.config/opencode/opencode.json",
+            executablePaths: commonExecutablePaths(name: "opencode", homeDirectory: homeDirectory)
+        )
+    }
+
+    static func amp(homeDirectory: URL) -> Self {
+        Self(
+            id: "amp",
+            kind: .amp,
+            displayName: "Amp CLI",
+            providerID: "amp",
+            wireAPI: nil,
+            configurationURLs: [homeDirectory.appendingPathComponent(".config/amp/settings.json")],
+            configurationLabel: "~/.config/amp/settings.json",
+            executablePaths: commonExecutablePaths(name: "amp", homeDirectory: homeDirectory)
+        )
+    }
+
+    static func qwenCode(homeDirectory: URL) -> Self {
+        Self(
+            id: "qwen-code",
+            kind: .qwenCode,
+            displayName: "Qwen Code",
+            providerID: "qwen",
+            wireAPI: nil,
+            configurationURLs: [homeDirectory.appendingPathComponent(".qwen/settings.json")],
+            configurationLabel: "~/.qwen/settings.json",
+            executablePaths: commonExecutablePaths(name: "qwen", homeDirectory: homeDirectory)
+                + commonExecutablePaths(name: "qwen-code", homeDirectory: homeDirectory)
+        )
+    }
+
+    private static func commonExecutablePaths(name: String, homeDirectory: URL) -> [String] {
+        [
+            "/opt/homebrew/bin/\(name)",
+            "/usr/local/bin/\(name)",
+            homeDirectory.appendingPathComponent(".local/bin/\(name)").path,
+            homeDirectory.appendingPathComponent(".cargo/bin/\(name)").path
+        ]
+    }
 }

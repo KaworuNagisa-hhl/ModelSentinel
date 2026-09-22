@@ -14,6 +14,7 @@ ModelSentinel 是本地优先的开源 macOS 工具。当前版本没有用户�
 - Cursor、Windsurf、VS Code、Zed：应用状态、用户设置中的公开模型或 Base URL 字段，以及扩展目录名称。
 - ModelSentinel：`~/Library/Application Support/ModelSentinel/status.json` 中由本地探针写入的状态结果。
 - macOS 工作区：正在运行及当前前台 GUI 应用的名称和 Bundle Identifier。
+- CLI 进程：PID、父 PID、短进程名和可执行文件路径，用于判断 Codex、Claude Code 等 CLI 是否运行以及来自哪个终端或 IDE。不会读取完整命令参数。
 
 ## 凭据保护
 

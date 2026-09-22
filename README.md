@@ -16,8 +16,46 @@ ModelSentinel 是一款开源的 macOS AI 客户端线路观察工具。它把�
 | Windsurf | IDE | 安装、运行、用户配置和 AI 扩展；实际上游等待响应证据 |
 | Visual Studio Code | IDE | 运行状态、模型设置、Copilot / Claude / Codex / Continue / Cline / Roo Code 等扩展 |
 | Zed | IDE | 安装、运行、Provider 配置与自定义 Base URL 线索 |
+| Gemini CLI / Aider / OpenCode / Amp / Qwen Code | CLI | 安装、CLI 进程、宿主终端或 IDE、配置模型与 Base URL 线索 |
 
 ModelSentinel 优先展示当前前台 AI 客户端，其次依次选择正在运行、已配置和已安装的客户端。菜单栏可查看全部检测结果并手动切换。
+
+CLI 进程每 2 秒在本机刷新一次。进程扫描只读取 PID、父 PID、短进程名和可执行文件路径，不读取完整命令参数，因此不会把命令行中的提示词或密钥收集进来。能够沿父进程识别 Terminal、iTerm、Warp、VS Code、Cursor、Windsurf、Zed 和部分 JetBrains 系 IDE；无法证明关联关系时会显示为后台 CLI，而不会假定其属于当前窗口。
+
+## 安装
+
+### 一键安装脚本
+
+默认安装到 `~/Applications/ModelSentinel.app`，不需要 `sudo`。脚本会下载 Release 和 `SHA256SUMS.txt`，校验通过后才安装；已有版本会先备份。
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/KaworuNagisa-hhl/ModelSentinel/main/install.sh | bash
+```
+
+更稳妥的做法是先下载并检查脚本：
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/KaworuNagisa-hhl/ModelSentinel/main/install.sh
+less install.sh
+bash install.sh
+```
+
+自定义安装目录或版本：
+
+```bash
+MODEL_SENTINEL_INSTALL_DIR="$HOME/Applications" \
+MODEL_SENTINEL_VERSION="0.2.0" \
+bash install.sh
+```
+
+当前预览包尚未使用 Developer ID 签名和 Apple 公证。如果首次启动被 Gatekeeper 拦截，请进入“系统设置 → 隐私与安全性”，确认应用来源后选择“仍要打开”。安装脚本不会自动删除隔离属性或绕过 macOS 安全检查。
+
+### 手动安装
+
+1. 从 [GitHub Releases](https://github.com/KaworuNagisa-hhl/ModelSentinel/releases) 下载 arm64 ZIP 和 `SHA256SUMS.txt`。
+2. 运行 `shasum -a 256 -c SHA256SUMS.txt` 校验安装包。
+3. 解压并把 `ModelSentinel.app` 移到 `~/Applications` 或 `/Applications`。
+4. 启动后，ModelSentinel 常驻菜单栏；带刘海的 MacBook 可将鼠标移动到刘海区域展开。
 
 ## 证据分级
 
@@ -57,7 +95,7 @@ swift build
 ./script/build_and_run.sh --package
 ```
 
-输出位于 `outputs/ModelSentinel-v0.1.0-macOS-arm64.zip`。打包命令会使用 Swift Release 优化，但当前仍是临时签名构建；面向普通用户公开分发前，应使用 Developer ID、Hardened Runtime 和 Apple 公证。
+输出位于 `outputs/ModelSentinel-v0.2.0-macOS-arm64.zip`。打包命令会使用 Swift Release 优化，但当前仍是临时签名构建；面向普通用户公开分发前，应使用 Developer ID、Hardened Runtime 和 Apple 公证。
 
 ## 本地状态文件
 

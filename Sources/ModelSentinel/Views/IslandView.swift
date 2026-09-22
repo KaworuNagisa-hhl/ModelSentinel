@@ -117,8 +117,9 @@ struct IslandView: View {
 
     private var headerSubtitle: String {
         let client = store.snapshot.client?.displayName ?? "客户端待识别"
+        let host = store.snapshot.client?.hostApplication.map { " · \($0)" } ?? ""
         let origin = store.snapshot.origin?.displayName ?? store.snapshot.provider
-        return "\(client) · \(origin)"
+        return "\(client)\(host) · \(origin)"
     }
 
     private var modelCard: some View {

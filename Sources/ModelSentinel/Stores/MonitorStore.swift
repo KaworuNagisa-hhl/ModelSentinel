@@ -6,7 +6,7 @@ import AppKit
 final class MonitorStore: ObservableObject {
     static let shared = MonitorStore()
 
-    @Published var snapshot = RouteSnapshot.preview
+    @Published var snapshot = RouteSnapshot.initial
     @Published var isExpanded = false
     @Published var isVisible = true
     @Published var isWatchingFile = true
@@ -53,7 +53,7 @@ final class MonitorStore: ObservableObject {
         }
     }
 
-    func detectRouteOrigin() {
+    func detectRouteOrigin(preserveLiveEvidence: Bool = false) {
         guard !isDetectingOrigin else { return }
         isDetectingOrigin = true
         let runtime = runtimeContext()
@@ -63,7 +63,12 @@ final class MonitorStore: ObservableObject {
             detectedRoutes = environment.matches
             detectedClients = environment.matches.map(\.client)
             if let active = environment.active {
-                applyDetectedRoute(active)
+                let hasLiveEvidence = snapshot.health == .verified &&
+                    snapshot.modelDetails?.responseModelID != nil &&
+                    snapshot.client?.id == active.client.id
+                if !preserveLiveEvidence || !hasLiveEvidence {
+                    applyDetectedRoute(active)
+                }
             } else {
                 snapshot.client = nil
                 snapshot.origin = nil
@@ -169,7 +174,12 @@ final class MonitorStore: ObservableObject {
         snapshot.latencyMS = 0
         snapshot.toolAgreement = 0
         snapshot.textAgreement = 0
-        snapshot.note = "已识别 \(route.client.displayName) 配置，等待真实响应验证"
+        if let processID = route.client.processID {
+            let host = route.client.hostApplication.map { " · \($0)" } ?? ""
+            snapshot.note = "CLI 运行中 · PID \(processID)\(host)，等待响应验证"
+        } else {
+            snapshot.note = "已识别 \(route.client.displayName) 配置，等待真实响应验证"
+        }
         snapshot.evidence = [
             EvidenceMetric(name: "客户端", value: route.client.isRunning ? 1 : 0.72),
             EvidenceMetric(name: "配置", value: route.client.hasConfiguration ? 1 : 0.55),

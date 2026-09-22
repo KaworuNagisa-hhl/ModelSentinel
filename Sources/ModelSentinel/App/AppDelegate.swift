@@ -3,6 +3,7 @@ import AppKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var islandController: FloatingIslandController?
+    private var runtimeScanTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -23,10 +24,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             name: NSWorkspace.didActivateApplicationNotification,
             object: nil
         )
+
+        runtimeScanTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard !Task.isCancelled else { return }
+                MonitorStore.shared.detectRouteOrigin(preserveLiveEvidence: true)
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         NSWorkspace.shared.notificationCenter.removeObserver(self)
+        runtimeScanTask?.cancel()
         Task {
             await StatusFileMonitor.shared.stop()
         }
@@ -45,6 +55,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func activeApplicationChanged(_ notification: Notification) {
-        MonitorStore.shared.detectRouteOrigin()
+        MonitorStore.shared.detectRouteOrigin(preserveLiveEvidence: true)
     }
 }

@@ -5,6 +5,11 @@ enum AIClientKind: String, Codable, Sendable {
     case chatGPT
     case claudeDesktop
     case claudeCode
+    case geminiCLI
+    case aider
+    case openCode
+    case amp
+    case qwenCode
     case cursor
     case windsurf
     case visualStudioCode
@@ -55,6 +60,15 @@ struct AIClientRuntimeContext: Sendable {
     func isFrontmost(bundleFragments: [String], nameFragments: [String]) -> Bool {
         matches(frontmostApplication, bundleFragments: bundleFragments, nameFragments: nameFragments)
     }
+
+    func isFrontmostHost(_ hostName: String?) -> Bool {
+        guard let hostName, let frontmostApplication else { return false }
+        let frontmostName = frontmostApplication.localizedName?.lowercased() ?? ""
+        let frontmostBundle = frontmostApplication.bundleIdentifier?.lowercased() ?? ""
+        let host = hostName.lowercased()
+        return (!frontmostName.isEmpty && (frontmostName.contains(host) || host.contains(frontmostName))) ||
+            frontmostBundle.contains(host.replacingOccurrences(of: " ", with: ""))
+    }
 }
 
 struct AIClientDetection: Identifiable, Codable, Equatable, Sendable {
@@ -68,9 +82,13 @@ struct AIClientDetection: Identifiable, Codable, Equatable, Sendable {
     let hasConfiguration: Bool
     let integrations: [String]
     let evidence: [String]
+    var processID: Int? = nil
+    var hostApplication: String? = nil
 
     var stateLabel: String {
+        if isFrontmost, surface == .commandLine { return "当前终端会话" }
         if isFrontmost { return "当前前台" }
+        if isRunning, surface == .commandLine { return "CLI 正在运行" }
         if isRunning { return "正在运行" }
         if hasConfiguration { return "已发现配置" }
         return "已安装"

@@ -5,8 +5,8 @@ MODE="${1:-run}"
 APP_NAME="ModelSentinel"
 BUNDLE_ID="com.modelsentinel.app"
 MIN_SYSTEM_VERSION="14.0"
-APP_VERSION="0.1.0"
-BUILD_NUMBER="1"
+APP_VERSION="0.2.0"
+BUILD_NUMBER="2"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -85,6 +85,11 @@ cat >"$INFO_PLIST" <<PLIST
 </plist>
 PLIST
 
+# SwiftPM signs only the executable. Re-sign the completed bundle so the
+# generated Info.plist and bundle structure are covered by one valid ad-hoc
+# signature. Public trust still requires Developer ID signing and notarization.
+/usr/bin/codesign --force --deep --sign - "$APP_BUNDLE"
+
 open_app() {
   /usr/bin/open -n "$APP_BUNDLE"
 }
@@ -93,7 +98,7 @@ package_release() {
   rm -rf "$RELEASE_DIR"
   mkdir -p "$RELEASE_DIR" "$(dirname "$RELEASE_ARCHIVE")"
   cp -R "$APP_BUNDLE" "$RELEASE_DIR/"
-  cp "$ROOT_DIR/README.md" "$ROOT_DIR/LICENSE" "$ROOT_DIR/PRIVACY.md" "$RELEASE_DIR/"
+  cp "$ROOT_DIR/README.md" "$ROOT_DIR/LICENSE" "$ROOT_DIR/PRIVACY.md" "$ROOT_DIR/install.sh" "$RELEASE_DIR/"
   rm -f "$RELEASE_ARCHIVE"
   /usr/bin/ditto -c -k --norsrc --keepParent "$RELEASE_DIR" "$RELEASE_ARCHIVE"
   echo "release package: $RELEASE_ARCHIVE"

@@ -53,6 +53,29 @@ struct RouteSnapshot: Codable, Equatable, Sendable {
     var note: String
     var evidence: [EvidenceMetric]
 
+    static let initial = RouteSnapshot(
+        client: nil,
+        claimedModel: "正在扫描",
+        matchedFamily: "等待响应证据",
+        provider: "正在识别 AI 客户端",
+        origin: nil,
+        modelDetails: nil,
+        health: .probing,
+        confidence: 0,
+        latencyMS: 0,
+        toolAgreement: 0,
+        textAgreement: 0,
+        routeChangedAt: nil,
+        updatedAt: .now,
+        note: "正在扫描桌面客户端、IDE 与 CLI",
+        evidence: [
+            EvidenceMetric(name: "客户端", value: 0),
+            EvidenceMetric(name: "配置", value: 0),
+            EvidenceMetric(name: "线路", value: 0),
+            EvidenceMetric(name: "模型", value: 0)
+        ]
+    )
+
     static let preview = RouteSnapshot(
         client: AIClientDetection(
             id: "codex",
