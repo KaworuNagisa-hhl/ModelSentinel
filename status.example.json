@@ -1,0 +1,48 @@
+{
+  "client": {
+    "id": "codex",
+    "kind": "codex",
+    "displayName": "Codex",
+    "surface": "desktop_app",
+    "isInstalled": true,
+    "isRunning": true,
+    "isFrontmost": true,
+    "hasConfiguration": true,
+    "integrations": [],
+    "evidence": ["检测到正在运行的应用", "发现 ~/.codex/config.toml"]
+  },
+  "claimedModel": "GPT-5.6 Codex",
+  "matchedFamily": "GPT-5.x Codex",
+  "provider": "Sub2API · 主线路",
+  "origin": {
+    "kind": "remote_relay",
+    "credentialKind": "relay_key",
+    "displayName": "Sub2API（配置声明）",
+    "host": "relay.example.com",
+    "confidence": 0.80,
+    "evidence": ["自定义 API Base URL", "Provider 名称声明为 Sub2API"]
+  },
+  "modelDetails": {
+    "requestedModelID": "gpt-5.6-codex",
+    "responseModelID": "gpt-5.6-codex-2026-08-01",
+    "behavioralMatch": "GPT-5.x Codex",
+    "reasoningEffort": "high",
+    "wireAPI": "responses",
+    "providerID": "sub2api",
+    "contextWindowTokens": null
+  },
+  "health": "verified",
+  "confidence": 0.92,
+  "latencyMS": 1240,
+  "toolAgreement": 0.96,
+  "textAgreement": 0.88,
+  "routeChangedAt": null,
+  "updatedAt": "2026-09-22T10:00:00Z",
+  "note": "工具行为与可信基线一致",
+  "evidence": [
+    { "name": "工具", "value": 0.96 },
+    { "name": "文本", "value": 0.88 },
+    { "name": "协议", "value": 1.0 },
+    { "name": "稳定", "value": 0.91 }
+  ]
+}
