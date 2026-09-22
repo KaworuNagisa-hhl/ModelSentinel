@@ -31,19 +31,25 @@ struct IslandView: View {
     }
 
     private var notchedIdleContent: some View {
-        Image(systemName: "shield.fill")
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(store.snapshot.health.compactIndicatorColor)
-            .shadow(color: store.snapshot.health.compactIndicatorColor.opacity(0.75), radius: 4)
-            .frame(
-                width: store.displayLayout.leftWingWidth,
-                height: store.displayLayout.compactHeight
+        HStack(spacing: 0) {
+            StatusDot(
+                health: store.snapshot.health,
+                tint: store.snapshot.health.compactIndicatorColor
             )
+            .frame(width: 30, height: 30)
+
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, 16)
+        .frame(
+            width: store.displayLayout.leftWingWidth,
+            height: store.displayLayout.compactHeight
+        )
             .background {
                 UnevenRoundedRectangle(
                     cornerRadii: .init(
                         topLeading: 0,
-                        bottomLeading: 11,
+                        bottomLeading: 16,
                         bottomTrailing: 0,
                         topTrailing: 0
                     ),

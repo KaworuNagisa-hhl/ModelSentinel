@@ -4,6 +4,9 @@ import SwiftUI
 
 @MainActor
 final class FloatingIslandController: NSObject {
+    private static let expandedWidth: CGFloat = 372
+    private static let compactNotchOverlap: CGFloat = 8
+
     private let store: MonitorStore
     private let panel: NSPanel
     private let sensorPanel: NSPanel
@@ -147,7 +150,7 @@ final class FloatingIslandController: NSObject {
         let height: CGFloat = store.displayLayout.isNotched
             ? 264 + store.displayLayout.compactHeight
             : 276
-        let size = NSSize(width: 372, height: height)
+        let size = NSSize(width: Self.expandedWidth, height: height)
         return NSRect(
             x: centerX - size.width / 2,
             y: top - size.height,
@@ -190,10 +193,12 @@ final class FloatingIslandController: NSObject {
         guard notchWidth > 40 else { return nil }
         let menuBarBottomY = screen.visibleFrame.maxY
         let sensorHeight = max(1, screen.frame.maxY - menuBarBottomY)
+        let compactLeftX = screen.frame.midX - Self.expandedWidth / 2
+        let compactStatusWidth = leftArea.maxX - compactLeftX + Self.compactNotchOverlap
         let layout = IslandDisplayLayout(
             isNotched: true,
             compactHeight: sensorHeight,
-            leftWingWidth: 30,
+            leftWingWidth: compactStatusWidth,
             notchGapWidth: notchWidth,
             rightWingWidth: 0
         )
@@ -209,7 +214,7 @@ final class FloatingIslandController: NSObject {
                 height: sensorHeight
             ),
             compactStatusFrame: NSRect(
-                x: leftArea.maxX - layout.leftWingWidth,
+                x: compactLeftX,
                 y: menuBarBottomY,
                 width: layout.leftWingWidth,
                 height: sensorHeight
