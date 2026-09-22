@@ -20,7 +20,9 @@ struct IslandView: View {
         .onTapGesture(perform: onToggle)
         .onHover(perform: onHoverChange)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("模型线路状态：\(store.snapshot.health.label)")
+        .accessibilityLabel(
+            "模型线路状态：\(statusTitle)；当前会话：\(store.snapshot.claimedModel)；\(store.snapshot.note)"
+        )
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: store.isExpanded)
         .animation(.easeInOut(duration: 0.22), value: store.snapshot.health)
     }
@@ -29,7 +31,7 @@ struct IslandView: View {
         HStack(spacing: 9) {
             StatusDot(health: store.snapshot.health)
 
-            Text(store.snapshot.health.label)
+            Text(statusTitle)
                 .font(.system(size: 12.5, weight: .semibold, design: .rounded))
 
             Spacer(minLength: 4)
@@ -91,7 +93,7 @@ struct IslandView: View {
                 .background(store.snapshot.health.color.opacity(0.13), in: Circle())
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(store.snapshot.health.label)
+                Text(statusTitle)
                     .font(.system(size: 14.5, weight: .semibold, design: .rounded))
                 Text(headerSubtitle)
                     .font(.system(size: 10.5, weight: .medium))
@@ -122,11 +124,20 @@ struct IslandView: View {
         return "\(client)\(host) · \(origin)"
     }
 
+    private var statusTitle: String {
+        if store.snapshot.health == .configured,
+           let client = store.snapshot.client,
+           client.isRunning {
+            return "\(client.displayName) 使用中"
+        }
+        return store.snapshot.health.label
+    }
+
     private var modelCard: some View {
         VStack(spacing: 7) {
             HStack(spacing: 8) {
                 modelDetail(
-                    label: "配置请求 ID",
+                    label: "当前请求 / 会话 ID",
                     value: store.snapshot.modelDetails?.requestedModelID ?? store.snapshot.claimedModel
                 )
                 modelDetail(

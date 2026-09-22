@@ -15,6 +15,7 @@ ModelSentinel 是本地优先的开源 macOS 工具。当前版本没有用户�
 - ModelSentinel：`~/Library/Application Support/ModelSentinel/status.json` 中由本地探针写入的状态结果。
 - macOS 工作区：正在运行及当前前台 GUI 应用的名称和 Bundle Identifier。
 - CLI 进程：PID、父 PID、短进程名和可执行文件路径，用于判断 Codex、Claude Code 等 CLI 是否运行以及来自哪个终端或 IDE。不会读取完整命令参数。
+- Codex 会话态：只从最近活动会话 JSONL 的尾部提取模型 ID、推理档位、上下文窗口和任务开始/完成状态；不会保存或展示提示词、回答正文或工具参数。
 
 ## 凭据保护
 

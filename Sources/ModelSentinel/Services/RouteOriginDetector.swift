@@ -63,8 +63,8 @@ actor RouteOriginDetector {
     }
 
     private func detectCodexDesktop(runtime: AIClientRuntimeContext) -> ClientRouteDetection? {
-        let bundleFragments = ["openai.codex", ".codex"]
-        let nameFragments = ["Codex"]
+        let bundleFragments = ["com.openai.codex"]
+        let nameFragments = ["Codex", "ChatGPT"]
         let configURL = codexHomeURL().appendingPathComponent("config.toml")
         let hasConfiguration = fileManager.fileExists(atPath: configURL.path)
         let isInstalled = hasInstalledApplication(named: "Codex.app") ||
@@ -134,7 +134,7 @@ actor RouteOriginDetector {
     }
 
     private func detectChatGPT(runtime: AIClientRuntimeContext) -> ClientRouteDetection? {
-        let bundleFragments = ["openai.chat", "chatgpt"]
+        let bundleFragments = ["com.openai.chat", "com.openai.chatgpt"]
         let nameFragments = ["ChatGPT"]
         let isInstalled = hasInstalledApplication(named: "ChatGPT.app")
         let isRunning = runtime.isRunning(bundleFragments: bundleFragments, nameFragments: nameFragments)
@@ -163,7 +163,7 @@ actor RouteOriginDetector {
     }
 
     private func detectClaudeDesktop(runtime: AIClientRuntimeContext) -> ClientRouteDetection? {
-        let bundleFragments = ["anthropic.claude", "claudefordesktop"]
+        let bundleFragments = ["com.anthropic.claudefordesktop"]
         let nameFragments = ["Claude"]
         let configURL = applicationSupportURL("Claude/claude_desktop_config.json")
         let hasConfiguration = fileManager.fileExists(atPath: configURL.path)
@@ -301,7 +301,7 @@ actor RouteOriginDetector {
             kind: .cursor,
             displayName: "Cursor",
             appName: "Cursor.app",
-            bundleFragments: ["todesktop", "cursor"],
+            bundleFragments: ["com.todesktop.230313mzl4w4u92"],
             nameFragments: ["Cursor"],
             settingsRelativePath: "Cursor/User/settings.json",
             extensionDirectory: homeDirectory.appendingPathComponent(".cursor/extensions"),
@@ -316,7 +316,7 @@ actor RouteOriginDetector {
             kind: .windsurf,
             displayName: "Windsurf",
             appName: "Windsurf.app",
-            bundleFragments: ["exafunction.windsurf", "windsurf"],
+            bundleFragments: ["com.exafunction.windsurf"],
             nameFragments: ["Windsurf"],
             settingsRelativePath: "Windsurf/User/settings.json",
             extensionDirectory: homeDirectory.appendingPathComponent(".windsurf/extensions"),
@@ -325,7 +325,7 @@ actor RouteOriginDetector {
     }
 
     private func detectVisualStudioCode(runtime: AIClientRuntimeContext) -> ClientRouteDetection? {
-        let bundleFragments = ["com.microsoft.vscode", "visual-studio-code"]
+        let bundleFragments = ["com.microsoft.vscode"]
         let nameFragments = ["Visual Studio Code"]
         let settingsURL = applicationSupportURL("Code/User/settings.json")
         let extensionDirectories = [
@@ -387,7 +387,7 @@ actor RouteOriginDetector {
     }
 
     private func detectZed(runtime: AIClientRuntimeContext) -> ClientRouteDetection? {
-        let bundleFragments = ["dev.zed.zed", ".zed"]
+        let bundleFragments = ["dev.zed.zed"]
         let nameFragments = ["Zed"]
         let settingsURL = applicationSupportURL("Zed/settings.json")
         let hasConfiguration = fileManager.fileExists(atPath: settingsURL.path)

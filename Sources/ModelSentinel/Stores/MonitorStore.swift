@@ -59,6 +59,7 @@ final class MonitorStore: ObservableObject {
         let runtime = runtimeContext()
         Task { [weak self] in
             let environment = await RouteOriginDetector.shared.detectEnvironment(runtime: runtime)
+            let codexSession = await CodexSessionDetector.shared.latestObservation()
             guard let self else { return }
             detectedRoutes = environment.matches
             detectedClients = environment.matches.map(\.client)
@@ -68,6 +69,9 @@ final class MonitorStore: ObservableObject {
                     snapshot.client?.id == active.client.id
                 if !preserveLiveEvidence || !hasLiveEvidence {
                     applyDetectedRoute(active)
+                }
+                if active.client.kind == .codex, let codexSession {
+                    applyCodexSession(codexSession)
                 }
             } else {
                 snapshot.client = nil
@@ -177,16 +181,41 @@ final class MonitorStore: ObservableObject {
         if let processID = route.client.processID {
             let host = route.client.hostApplication.map { " · \($0)" } ?? ""
             snapshot.note = "CLI 运行中 · PID \(processID)\(host)，等待响应验证"
+        } else if route.client.isRunning {
+            snapshot.note = "已检测到 \(route.client.displayName) 正在运行，等待首个响应验证"
         } else {
             snapshot.note = "已识别 \(route.client.displayName) 配置，等待真实响应验证"
         }
         snapshot.evidence = [
-            EvidenceMetric(name: "客户端", value: route.client.isRunning ? 1 : 0.72),
+            EvidenceMetric(name: route.client.isRunning ? "运行" : "客户端", value: route.client.isRunning ? 1 : 0.72),
             EvidenceMetric(name: "配置", value: route.client.hasConfiguration ? 1 : 0.55),
             EvidenceMetric(name: "线路", value: route.origin.confidence),
             EvidenceMetric(name: "模型", value: route.modelDetails.responseModelID == nil ? 0 : 1)
         ]
         snapshot.updatedAt = .now
+    }
+
+    private func applyCodexSession(_ observation: CodexSessionObservation) {
+        guard snapshot.client?.kind == .codex else { return }
+        if var details = snapshot.modelDetails {
+            details.requestedModelID = observation.modelID ?? details.requestedModelID
+            details.reasoningEffort = observation.reasoningEffort ?? details.reasoningEffort
+            details.contextWindowTokens = observation.contextWindowTokens ?? details.contextWindowTokens
+            snapshot.modelDetails = details
+        }
+        if let modelID = observation.modelID {
+            snapshot.claimedModel = modelID
+        }
+        snapshot.note = observation.isTaskActive
+            ? "Codex 正在处理请求 · 会话模型 \(observation.modelID ?? "待识别")"
+            : "Codex 正在运行 · 最近会话模型 \(observation.modelID ?? "待识别")"
+        if snapshot.evidence.indices.contains(3) {
+            snapshot.evidence[3] = EvidenceMetric(
+                name: "会话",
+                value: observation.modelID == nil ? 0 : 1
+            )
+        }
+        snapshot.updatedAt = observation.updatedAt
     }
 
     private func runtimeContext() -> AIClientRuntimeContext {
@@ -196,16 +225,35 @@ final class MonitorStore: ObservableObject {
                 bundleIdentifier: $0.bundleIdentifier,
                 localizedName: $0.localizedName
             )
-        }
+        }.filter(isRelevantRuntimeApplication)
         let frontmost = workspace.frontmostApplication.map {
             RunningApplicationDescriptor(
                 bundleIdentifier: $0.bundleIdentifier,
                 localizedName: $0.localizedName
             )
-        }
+        }.flatMap { isRelevantRuntimeApplication($0) ? $0 : nil }
         return AIClientRuntimeContext(
             runningApplications: running,
             frontmostApplication: frontmost
         )
+    }
+
+    private func isRelevantRuntimeApplication(_ application: RunningApplicationDescriptor) -> Bool {
+        let bundle = application.bundleIdentifier?.lowercased() ?? ""
+        let name = application.localizedName?.lowercased() ?? ""
+        let supportedBundleIdentifiers = [
+            "com.openai.codex", "com.openai.chat", "com.openai.chatgpt",
+            "com.anthropic.claudefordesktop",
+            "com.todesktop.230313mzl4w4u92", "com.exafunction.windsurf",
+            "com.microsoft.vscode", "dev.zed.zed",
+            "com.apple.terminal", "com.googlecode.iterm2", "dev.warp.warp-stable",
+            "com.google.android.studio", "com.huawei.devecostudio.ds", "com.jetbrains.intellij"
+        ]
+        let supportedNames = [
+            "codex", "chatgpt", "claude", "cursor", "windsurf", "zed",
+            "visual studio code", "code", "terminal", "iterm2", "warp",
+            "android studio", "deveco studio", "intellij idea"
+        ]
+        return supportedBundleIdentifiers.contains(bundle) || supportedNames.contains(name)
     }
 }
