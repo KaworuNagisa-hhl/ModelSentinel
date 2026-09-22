@@ -19,6 +19,7 @@ final class FloatingIslandController: NSObject {
         let centerX: CGFloat
         let expandedTopY: CGFloat
         let sensorFrame: NSRect
+        let compactStatusFrame: NSRect
     }
 
     init(store: MonitorStore) {
@@ -112,7 +113,8 @@ final class FloatingIslandController: NSObject {
             }
 
             guard store.isExpanded else {
-                panel.orderOut(nil)
+                setPanelFrame(notch.compactStatusFrame, animated: animated)
+                panel.orderFrontRegardless()
                 return
             }
 
@@ -191,7 +193,7 @@ final class FloatingIslandController: NSObject {
         let layout = IslandDisplayLayout(
             isNotched: true,
             compactHeight: sensorHeight,
-            leftWingWidth: 0,
+            leftWingWidth: 30,
             notchGapWidth: notchWidth,
             rightWingWidth: 0
         )
@@ -204,6 +206,12 @@ final class FloatingIslandController: NSObject {
                 x: screen.frame.midX - notchWidth / 2,
                 y: menuBarBottomY,
                 width: notchWidth,
+                height: sensorHeight
+            ),
+            compactStatusFrame: NSRect(
+                x: leftArea.maxX - layout.leftWingWidth,
+                y: menuBarBottomY,
+                width: layout.leftWingWidth,
                 height: sensorHeight
             )
         )

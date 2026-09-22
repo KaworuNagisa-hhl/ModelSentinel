@@ -10,6 +10,9 @@ struct IslandView: View {
             if store.isExpanded {
                 expandedContent
                     .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+            } else if store.displayLayout.isNotched {
+                notchedIdleContent
+                    .transition(.opacity)
             } else if !store.displayLayout.isNotched {
                 floatingIdleContent
                     .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
@@ -25,6 +28,41 @@ struct IslandView: View {
         )
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: store.isExpanded)
         .animation(.easeInOut(duration: 0.22), value: store.snapshot.health)
+    }
+
+    private var notchedIdleContent: some View {
+        Image(systemName: "shield.fill")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(store.snapshot.health.compactIndicatorColor)
+            .shadow(color: store.snapshot.health.compactIndicatorColor.opacity(0.75), radius: 4)
+            .frame(
+                width: store.displayLayout.leftWingWidth,
+                height: store.displayLayout.compactHeight
+            )
+            .background {
+                UnevenRoundedRectangle(
+                    cornerRadii: .init(
+                        topLeading: 0,
+                        bottomLeading: 11,
+                        bottomTrailing: 0,
+                        topTrailing: 0
+                    ),
+                    style: .continuous
+                )
+                .fill(.black)
+            }
+            .accessibilityLabel("收起状态：\(compactStatusLabel)")
+    }
+
+    private var compactStatusLabel: String {
+        switch store.snapshot.health {
+        case .verified:
+            "正常"
+        case .configured, .probing, .warning:
+            "疑似或等待验证"
+        case .mismatch, .offline:
+            "异常"
+        }
     }
 
     private var floatingIdleContent: some View {
