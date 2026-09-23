@@ -49,7 +49,7 @@ bash install.sh
 
 ```bash
 MODEL_SENTINEL_INSTALL_DIR="$HOME/Applications" \
-MODEL_SENTINEL_VERSION="0.2.0" \
+MODEL_SENTINEL_VERSION="0.3.0" \
 bash install.sh
 ```
 
@@ -144,7 +144,7 @@ swift build
 ./script/build_and_run.sh --package
 ```
 
-输出位于 `outputs/ModelSentinel-v0.2.0-macOS-arm64.zip`。打包命令会使用 Swift Release 优化，但当前仍是临时签名构建；面向普通用户公开分发前，应使用 Developer ID、Hardened Runtime 和 Apple 公证。
+输出位于 `outputs/ModelSentinel-v0.3.0-macOS-arm64.zip`。打包命令会使用 Swift Release 优化，但当前仍是临时签名构建；面向普通用户公开分发前，应使用 Developer ID、Hardened Runtime 和 Apple 公证。
 
 ## 本地状态文件
 
