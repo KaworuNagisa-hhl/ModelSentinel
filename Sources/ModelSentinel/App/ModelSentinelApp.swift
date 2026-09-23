@@ -4,16 +4,12 @@ import SwiftUI
 struct ModelSentinelApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = MonitorStore.shared
+    @StateObject private var proxyStore = ProxyStore.shared
 
     var body: some Scene {
         MenuBarExtra {
-            Button("展开状态岛") {
-                store.showExpanded()
-                appDelegate.showIsland()
-            }
-
-            Button("运行演示探针") {
-                store.runDemoProbe()
+            Button(store.isExpansionPinned ? "收起状态岛" : "固定展开状态岛") {
+                store.togglePinnedExpansion()
                 appDelegate.showIsland()
             }
 
@@ -41,9 +37,18 @@ struct ModelSentinelApp: App {
                 }
             }
 
-            Button("模拟线路降级") {
-                store.simulateMismatch()
-                appDelegate.showIsland()
+            Divider()
+
+            Text("检测模式：\(store.detectionMode.title)")
+            if store.detectionMode == .active {
+                Button("切换为被动检测（0 Token）") {
+                    store.setDetectionMode(.passive)
+                }
+            }
+
+            Text("本地代理：\(proxyStore.runtimeState.label)")
+            SettingsLink {
+                Text(store.detectionMode == .active ? "主动监测设置…" : "检测模式与代理设置…")
             }
 
             Divider()
@@ -72,5 +77,9 @@ struct ModelSentinelApp: App {
             Image(systemName: store.snapshot.health.symbol)
         }
         .menuBarExtraStyle(.menu)
+
+        Settings {
+            ProxySettingsView(store: proxyStore, monitorStore: store)
+        }
     }
 }

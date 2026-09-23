@@ -10,8 +10,7 @@ struct MetricBar: View {
                 Text(metric.name)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Text(metric.value.percentText)
-                    .monospacedDigit()
+                AnimatedPercentText(value: metric.value)
                     .foregroundStyle(.primary)
             }
             .font(.caption)
@@ -22,6 +21,7 @@ struct MetricBar: View {
                     Capsule()
                         .fill(tint.gradient)
                         .frame(width: proxy.size.width * max(0, min(metric.value, 1)))
+                        .animation(.easeInOut(duration: 0.65), value: metric.value)
                 }
             }
             .frame(height: 5)

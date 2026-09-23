@@ -1,42 +1,121 @@
 import SwiftUI
 
 struct IslandView: View {
+    @Environment(\.openSettings) private var openSettings
     @ObservedObject var store: MonitorStore
     let onToggle: () -> Void
     let onHoverChange: (Bool) -> Void
 
     var body: some View {
         Group {
-            if store.isExpanded {
+            if store.displayLayout.isNotched {
+                notchedContent
+            } else if store.isExpanded {
                 expandedContent
                     .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
-            } else if !store.displayLayout.isNotched {
+            } else {
                 floatingIdleContent
                     .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .foregroundStyle(.white)
         .contentShape(Rectangle())
         .onTapGesture(perform: onToggle)
         .onHover(perform: onHoverChange)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("模型线路状态：\(store.snapshot.health.label)")
+        .accessibilityLabel(
+            "模型线路状态：\(statusTitle)；当前会话：\(store.snapshot.claimedModel)；\(store.snapshot.note)"
+        )
+        .accessibilityHint(store.isExpansionPinned ? "点击收起" : "点击固定展开")
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: store.isExpanded)
         .animation(.easeInOut(duration: 0.22), value: store.snapshot.health)
+    }
+
+    private var notchedContent: some View {
+        ZStack(alignment: .topLeading) {
+            notchedSurface
+
+            if store.isExpanded {
+                expandedContent
+                    .transition(
+                        .asymmetric(
+                            insertion: .opacity.combined(with: .offset(y: -8)),
+                            removal: .opacity
+                        )
+                    )
+            } else {
+                Color.clear
+                    .frame(
+                        width: store.displayLayout.leftWingWidth,
+                        height: store.displayLayout.compactHeight
+                    )
+                    .accessibilityLabel("收起状态：\(compactStatusLabel)")
+            }
+
+            StatusDot(
+                health: store.snapshot.health,
+                tint: store.snapshot.health.compactIndicatorColor
+            )
+            .frame(width: 30, height: 30)
+            .offset(
+                x: 16,
+                y: store.isExpanded
+                    ? store.displayLayout.compactHeight
+                    : (store.displayLayout.compactHeight - 30) / 2
+            )
+            .zIndex(2)
+        }
+        .frame(
+            width: store.isExpanded ? 372 : store.displayLayout.leftWingWidth,
+            height: store.isExpanded
+                ? 264 + store.displayLayout.compactHeight
+                : store.displayLayout.compactHeight,
+            alignment: .topLeading
+        )
+    }
+
+    private var notchedSurface: some View {
+        let shape = UnevenRoundedRectangle(
+            cornerRadii: .init(
+                topLeading: 0,
+                bottomLeading: store.isExpanded ? 25 : 16,
+                bottomTrailing: store.isExpanded ? 25 : 0,
+                topTrailing: 0
+            ),
+            style: .continuous
+        )
+        return glassSurface(shape: shape)
+            .frame(
+                width: store.isExpanded ? 372 : store.displayLayout.leftWingWidth,
+                height: store.isExpanded
+                    ? 264 + store.displayLayout.compactHeight
+                    : store.displayLayout.compactHeight
+            )
+    }
+
+    private var compactStatusLabel: String {
+        switch store.snapshot.health {
+        case .verified:
+            "正常"
+        case .configured, .probing, .warning:
+            "疑似或等待验证"
+        case .mismatch, .offline:
+            "异常"
+        }
     }
 
     private var floatingIdleContent: some View {
         HStack(spacing: 9) {
             StatusDot(health: store.snapshot.health)
 
-            Text(store.snapshot.health.label)
+            Text(statusTitle)
                 .font(.system(size: 12.5, weight: .semibold, design: .rounded))
 
             Spacer(minLength: 4)
 
-            Text(store.snapshot.confidence.percentText)
+            AnimatedPercentText(value: store.snapshot.confidence)
                 .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                .monospacedDigit()
                 .foregroundStyle(store.snapshot.health.color)
         }
         .padding(.horizontal, 12)
@@ -79,19 +158,29 @@ struct IslandView: View {
                 : 276,
             alignment: .top
         )
-        .background(expandedSurface)
+        .background {
+            if !store.displayLayout.isNotched {
+                expandedSurface
+            }
+        }
     }
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(systemName: store.snapshot.health.symbol)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(store.snapshot.health.color)
+            Group {
+                if store.displayLayout.isNotched {
+                    Color.clear
+                } else {
+                    StatusDot(
+                        health: store.snapshot.health,
+                        tint: store.snapshot.health.compactIndicatorColor
+                    )
+                }
+            }
                 .frame(width: 30, height: 30)
-                .background(store.snapshot.health.color.opacity(0.13), in: Circle())
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(store.snapshot.health.label)
+                Text(statusTitle)
                     .font(.system(size: 14.5, weight: .semibold, design: .rounded))
                 Text(headerSubtitle)
                     .font(.system(size: 10.5, weight: .medium))
@@ -101,17 +190,63 @@ struct IslandView: View {
 
             Spacer(minLength: 8)
 
-            HStack(alignment: .firstTextBaseline, spacing: 1) {
-                Text("\(Int((store.snapshot.confidence * 100).rounded()))")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                Text("%")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+            if store.isExpansionPinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 8.5, weight: .semibold))
                     .foregroundStyle(.secondary)
+                    .transition(.scale.combined(with: .opacity))
+            }
+
+            VStack(alignment: .trailing, spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text("来源可信度")
+                        .font(.system(size: 8.5, weight: .medium))
+                        .foregroundStyle(.secondary)
+                    AnimatedPercentText(value: store.snapshot.confidence)
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                }
+                Text(modelVerificationLabel)
+                    .font(.system(size: 8.5, weight: .semibold))
+                    .foregroundStyle(modelVerificationColor)
             }
             .padding(.horizontal, 10)
-            .frame(height: 30)
-            .background(.white.opacity(0.07), in: Capsule())
+            .frame(minWidth: 94, minHeight: 36)
+            .background(
+                .white.opacity(0.07),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+        }
+    }
+
+    private var modelVerificationLabel: String {
+        switch store.snapshot.health {
+        case .verified where store.snapshot.modelDetails?.responseModelID != nil:
+            "响应声明一致"
+        case .mismatch:
+            "返回模型不匹配"
+        case .warning:
+            "返回模型存疑"
+        case .offline:
+            "响应离线"
+        case .probing:
+            "返回模型验证中"
+        case _ where store.snapshot.modelDetails?.responseObserved == true:
+            "模型字段未提供"
+        default:
+            "返回模型待验证"
+        }
+    }
+
+    private var modelVerificationColor: Color {
+        switch store.snapshot.health {
+        case .verified where store.snapshot.modelDetails?.responseModelID != nil:
+            .green
+        case .mismatch, .offline:
+            .red
+        case .probing:
+            .cyan
+        default:
+            .yellow
         }
     }
 
@@ -122,16 +257,29 @@ struct IslandView: View {
         return "\(client)\(host) · \(origin)"
     }
 
+    private var statusTitle: String {
+        if store.snapshot.health == .configured,
+           let client = store.snapshot.client {
+            if client.isFrontmost {
+                return "\(client.displayName) 已打开"
+            }
+            if client.isRunning {
+                return "\(client.displayName) 后台运行"
+            }
+        }
+        return store.snapshot.health.label
+    }
+
     private var modelCard: some View {
         VStack(spacing: 7) {
             HStack(spacing: 8) {
                 modelDetail(
-                    label: "配置请求 ID",
+                    label: "当前请求 / 会话 ID",
                     value: store.snapshot.modelDetails?.requestedModelID ?? store.snapshot.claimedModel
                 )
                 modelDetail(
-                    label: "响应返回 ID",
-                    value: store.snapshot.modelDetails?.responseModelID ?? "等待首个响应",
+                    label: "服务端返回模型",
+                    value: responseModelText,
                     pending: store.snapshot.modelDetails?.responseModelID == nil
                 )
             }
@@ -193,6 +341,16 @@ struct IslandView: View {
         return "\(reasoning) · \(protocolName)"
     }
 
+    private var responseModelText: String {
+        if let responseModelID = store.snapshot.modelDetails?.responseModelID {
+            return responseModelID
+        }
+        if store.snapshot.modelDetails?.responseObserved == true {
+            return "真实响应已确认 · 无模型字段"
+        }
+        return store.snapshot.health == .probing ? "正在采集响应证据" : "等待下一次响应"
+    }
+
     private var contextWindowText: String {
         guard let tokens = store.snapshot.modelDetails?.contextWindowTokens else {
             return "待探测"
@@ -249,6 +407,21 @@ struct IslandView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer(minLength: 4)
+            Button {
+                openSettings()
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: store.detectionMode.symbol)
+                    Text(store.detectionMode.compactTitle)
+                }
+                .font(.system(size: 8.5, weight: .semibold))
+                .foregroundStyle(store.detectionMode == .active ? .yellow : .secondary)
+                .padding(.horizontal, 6)
+                .frame(height: 18)
+                .background(.white.opacity(0.06), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("打开检测模式设置")
             Text(store.snapshot.updatedAt, style: .time)
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundStyle(.tertiary)
@@ -304,9 +477,8 @@ private struct EvidenceBadge: View {
 
     var body: some View {
         VStack(spacing: 2) {
-            Text(metric.value.percentText)
+            AnimatedPercentText(value: metric.value)
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .monospacedDigit()
             HStack(spacing: 3) {
                 Circle()
                     .fill(metric.value >= 0.75 ? tint : .yellow)

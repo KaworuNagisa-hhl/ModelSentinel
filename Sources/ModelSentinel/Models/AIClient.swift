@@ -14,6 +14,7 @@ enum AIClientKind: String, Codable, Sendable {
     case windsurf
     case visualStudioCode
     case zed
+    case qoder
 }
 
 enum AIClientSurface: String, Codable, Sendable {
@@ -47,8 +48,10 @@ struct AIClientRuntimeContext: Sendable {
         guard let application else { return false }
         let bundle = application.bundleIdentifier?.lowercased() ?? ""
         let name = application.localizedName?.lowercased() ?? ""
-        return bundleFragments.contains(where: { bundle.contains($0.lowercased()) }) ||
-            nameFragments.contains(where: { name.contains($0.lowercased()) })
+        if !bundle.isEmpty {
+            return bundleFragments.contains(where: { bundle == $0.lowercased() })
+        }
+        return nameFragments.contains(where: { name == $0.lowercased() })
     }
 
     func isRunning(bundleFragments: [String], nameFragments: [String]) -> Bool {

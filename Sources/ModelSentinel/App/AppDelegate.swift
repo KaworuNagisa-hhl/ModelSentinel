@@ -15,7 +15,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Task {
             await StatusFileMonitor.shared.start()
-            await MainActor.run { MonitorStore.shared.detectRouteOrigin() }
+            await MainActor.run {
+                ProxyStore.shared.startIfEnabled()
+                MonitorStore.shared.detectRouteOrigin()
+            }
         }
 
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -37,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         runtimeScanTask?.cancel()
+        ProxyStore.shared.stop()
         Task {
             await StatusFileMonitor.shared.stop()
         }
