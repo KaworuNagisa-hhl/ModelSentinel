@@ -47,7 +47,8 @@ actor RouteOriginDetector {
             detectCursor(runtime: runtime),
             detectWindsurf(runtime: runtime),
             detectVisualStudioCode(runtime: runtime),
-            detectZed(runtime: runtime)
+            detectZed(runtime: runtime),
+            detectQoder(runtime: runtime)
         ].compactMap { $0 }
         .sorted { score($0.client) > score($1.client) }
 
@@ -439,6 +440,46 @@ actor RouteOriginDetector {
                 providerID: nil,
                 contextWindowTokens: nil
             )
+        )
+    }
+
+    private func detectQoder(runtime: AIClientRuntimeContext) -> ClientRouteDetection? {
+        let bundleFragments = ["com.qoder.app"]
+        let nameFragments = ["Qoder"]
+        let settingsURL = homeDirectory.appendingPathComponent(".qoder/settings.json")
+        let hasConfiguration = fileManager.fileExists(atPath: settingsURL.path)
+        let isInstalled = hasInstalledApplication(named: "Qoder.app")
+        let isRunning = runtime.isRunning(
+            bundleFragments: bundleFragments,
+            nameFragments: nameFragments
+        )
+        guard isInstalled || isRunning || hasConfiguration else { return nil }
+
+        return managedClientProbe(
+            id: "qoder",
+            kind: .qoder,
+            displayName: "Qoder",
+            surface: .ide,
+            isInstalled: isInstalled,
+            isRunning: isRunning,
+            isFrontmost: runtime.isFrontmost(
+                bundleFragments: bundleFragments,
+                nameFragments: nameFragments
+            ),
+            hasConfiguration: hasConfiguration,
+            integrations: [],
+            origin: RouteOrigin(
+                kind: .managedService,
+                credentialKind: .vendorAccount,
+                displayName: "Qoder 托管线路 · 上游待确认",
+                host: nil,
+                confidence: 0.56,
+                evidence: [
+                    "检测到 Qoder 客户端或本机配置",
+                    "未发起 AI 请求时只能确认客户端状态，不能确认实际模型"
+                ]
+            ),
+            providerID: "qoder"
         )
     }
 

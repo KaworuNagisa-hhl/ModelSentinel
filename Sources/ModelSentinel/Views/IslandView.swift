@@ -26,6 +26,7 @@ struct IslandView: View {
         .accessibilityLabel(
             "模型线路状态：\(statusTitle)；当前会话：\(store.snapshot.claimedModel)；\(store.snapshot.note)"
         )
+        .accessibilityHint(store.isExpansionPinned ? "点击收起" : "点击固定展开")
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: store.isExpanded)
         .animation(.easeInOut(duration: 0.22), value: store.snapshot.health)
     }
@@ -189,6 +190,13 @@ struct IslandView: View {
 
             Spacer(minLength: 8)
 
+            if store.isExpansionPinned {
+                Image(systemName: "pin.fill")
+                    .font(.system(size: 8.5, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .transition(.scale.combined(with: .opacity))
+            }
+
             VStack(alignment: .trailing, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
                     Text("来源可信度")
@@ -252,9 +260,13 @@ struct IslandView: View {
 
     private var statusTitle: String {
         if store.snapshot.health == .configured,
-           let client = store.snapshot.client,
-           client.isRunning {
-            return "\(client.displayName) 使用中"
+           let client = store.snapshot.client {
+            if client.isFrontmost {
+                return "\(client.displayName) 已打开"
+            }
+            if client.isRunning {
+                return "\(client.displayName) 后台运行"
+            }
         }
         return store.snapshot.health.label
     }

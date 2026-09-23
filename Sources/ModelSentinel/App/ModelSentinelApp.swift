@@ -8,8 +8,8 @@ struct ModelSentinelApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            Button("展开状态岛") {
-                store.showExpanded()
+            Button(store.isExpansionPinned ? "收起状态岛" : "固定展开状态岛") {
+                store.togglePinnedExpansion()
                 appDelegate.showIsland()
             }
 

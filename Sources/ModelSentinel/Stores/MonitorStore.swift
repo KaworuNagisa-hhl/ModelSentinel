@@ -8,6 +8,7 @@ final class MonitorStore: ObservableObject {
 
     @Published var snapshot = RouteSnapshot.initial
     @Published var isExpanded = false
+    @Published private(set) var isExpansionPinned = false
     @Published var isVisible = true
     @Published var isWatchingFile = true
     @Published var lastReadError: String?
@@ -21,12 +22,23 @@ final class MonitorStore: ObservableObject {
 
     private init() {}
 
-    func toggleExpanded() {
-        isExpanded.toggle()
+    func togglePinnedExpansion() {
+        if isExpanded {
+            if isExpansionPinned {
+                isExpansionPinned = false
+                isExpanded = false
+            } else {
+                isExpansionPinned = true
+            }
+        } else {
+            isExpansionPinned = true
+            isExpanded = true
+        }
     }
 
     func showExpanded() {
         isVisible = true
+        isExpansionPinned = true
         isExpanded = true
     }
 
@@ -284,8 +296,10 @@ final class MonitorStore: ObservableObject {
         if let processID = route.client.processID {
             let host = route.client.hostApplication.map { " · \($0)" } ?? ""
             snapshot.note = "CLI 运行中 · PID \(processID)\(host)，等待响应验证"
+        } else if route.client.isFrontmost {
+            snapshot.note = "\(route.client.displayName) 当前位于前台 · 尚未观察到 AI 请求"
         } else if route.client.isRunning {
-            snapshot.note = "已检测到 \(route.client.displayName) 正在运行，等待首个响应验证"
+            snapshot.note = "\(route.client.displayName) 正在后台运行 · 等待首个 AI 请求"
         } else {
             snapshot.note = "已识别 \(route.client.displayName) 配置，等待真实响应验证"
         }
@@ -372,13 +386,14 @@ final class MonitorStore: ObservableObject {
             "com.anthropic.claudefordesktop",
             "com.todesktop.230313mzl4w4u92", "com.exafunction.windsurf",
             "com.microsoft.vscode", "dev.zed.zed",
+            "com.qoder.app",
             "com.apple.terminal", "com.googlecode.iterm2", "dev.warp.warp-stable",
             "com.google.android.studio", "com.huawei.devecostudio.ds", "com.jetbrains.intellij"
         ]
         let supportedNames = [
             "codex", "chatgpt", "claude", "cursor", "windsurf", "zed",
             "visual studio code", "code", "terminal", "iterm2", "warp",
-            "android studio", "deveco studio", "intellij idea"
+            "android studio", "deveco studio", "intellij idea", "qoder"
         ]
         return supportedBundleIdentifiers.contains(bundle) || supportedNames.contains(name)
     }

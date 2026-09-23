@@ -16,6 +16,7 @@ final class FloatingIslandController: NSObject {
     private var frameAnimationTask: Task<Void, Never>?
     private var isSensorHovered = false
     private var isContentHovered = false
+    private var suppressesHoverExpansionUntilExit = false
     private let pinsExpandedForPreview = ProcessInfo.processInfo.arguments.contains("--expanded")
 
     private struct NotchGeometry {
@@ -41,10 +42,13 @@ final class FloatingIslandController: NSObject {
         hoverSensor.onHoverChange = { [weak self] inside in
             self?.handleSensorHover(inside)
         }
+        hoverSensor.onClick = { [weak self] in
+            self?.togglePinnedExpansion()
+        }
 
         let view = IslandView(
             store: store,
-            onToggle: { [weak self] in self?.toggleExpanded() },
+            onToggle: { [weak self] in self?.togglePinnedExpansion() },
             onHoverChange: { [weak self] inside in self?.handleContentHover(inside) }
         )
         let hostingView = NSHostingView(rootView: view)
@@ -74,9 +78,15 @@ final class FloatingIslandController: NSObject {
         sensorPanel.orderOut(nil)
     }
 
-    func toggleExpanded() {
+    func togglePinnedExpansion() {
         hoverTask?.cancel()
-        store.toggleExpanded()
+        let wasPinned = store.isExpansionPinned
+        store.togglePinnedExpansion()
+        if wasPinned && !store.isExpanded {
+            suppressesHoverExpansionUntilExit = isSensorHovered || isContentHovered
+        } else {
+            suppressesHoverExpansionUntilExit = false
+        }
     }
 
     func refresh() {
@@ -92,6 +102,7 @@ final class FloatingIslandController: NSObject {
         )
         panel.isOpaque = false
         panel.backgroundColor = .clear
+        panel.ignoresMouseEvents = false
         panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.hidesOnDeactivate = false
@@ -263,6 +274,12 @@ final class FloatingIslandController: NSObject {
         guard !pinsExpandedForPreview else { return }
         hoverTask?.cancel()
 
+        if suppressesHoverExpansionUntilExit {
+            guard !isSensorHovered, !isContentHovered else { return }
+            suppressesHoverExpansionUntilExit = false
+        }
+        guard !store.isExpansionPinned else { return }
+
         let shouldExpand = isSensorHovered || isContentHovered
         guard shouldExpand != store.isExpanded else { return }
         let delay = shouldExpand ? Duration.milliseconds(150) : Duration.milliseconds(620)
@@ -312,6 +329,7 @@ final class FloatingIslandController: NSObject {
 
 private final class NotchHoverSensorView: NSView {
     var onHoverChange: ((Bool) -> Void)?
+    var onClick: (() -> Void)?
     private var trackingAreaReference: NSTrackingArea?
 
     override var isOpaque: Bool { false }
@@ -338,5 +356,13 @@ private final class NotchHoverSensorView: NSView {
 
     override func mouseExited(with event: NSEvent) {
         onHoverChange?(false)
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        onClick?()
     }
 }

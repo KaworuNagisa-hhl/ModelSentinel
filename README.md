@@ -16,9 +16,12 @@ ModelSentinel 是一款开源的 macOS AI 客户端线路观察工具。它把�
 | Windsurf | IDE | 安装、运行、用户配置和 AI 扩展；实际上游等待响应证据 |
 | Visual Studio Code | IDE | 运行状态、模型设置、Copilot / Claude / Codex / Continue / Cline / Roo Code 等扩展 |
 | Zed | IDE | 安装、运行、Provider 配置与自定义 Base URL 线索 |
+| Qoder | IDE | 安装、前台与后台运行状态、`.qoder` 配置是否存在；实际模型等待首次请求证据 |
 | Gemini CLI / Aider / OpenCode / Amp / Qwen Code | CLI | 安装、CLI 进程、宿主终端或 IDE、配置模型与 Base URL 线索 |
 
 ModelSentinel 优先展示当前前台 AI 客户端，其次依次选择正在运行、已配置和已安装的客户端。菜单栏可查看全部检测结果并手动切换。
+
+“客户端已打开”和“AI 正在响应”是不同状态。仅切换到 Qoder、Cursor 等 IDE 时，ModelSentinel 会显示当前前台客户端并提示等待首个 AI 请求，不会把已打开误写成正在使用，也不会沿用其他客户端的旧会话证据。
 
 CLI 进程每 2 秒在本机刷新一次。进程扫描只读取 PID、父 PID、短进程名和可执行文件路径，不读取完整命令参数，因此不会把命令行中的提示词或密钥收集进来。能够沿父进程识别 Terminal、iTerm、Warp、VS Code、Cursor、Windsurf、Zed 和部分 JetBrains 系 IDE；无法证明关联关系时会显示为后台 CLI，而不会假定其属于当前窗口。
 
@@ -104,6 +107,7 @@ bash install.sh
 
 - 带刘海的 MacBook：收起时感应区隐藏在实体刘海内，悬浮后从屏幕顶端展开。
 - 刘海与左侧常驻标签共同组成悬浮感应区；鼠标离开整个区域后，使用同一套形变动画缩回常驻状态。
+- 点击刘海感应区或展开面板可锁定展开，鼠标移出后仍保持；再次点击解除锁定并立即收回。
 - 收起时在实体刘海左侧常驻发光状态灯：绿色为已验证正常，黄色为疑似或等待验证，红色为明确异常或离线。
 - 状态灯在收起和展开时保持同一位置基准，并随黑色表面以 0.38 秒连续形变动画移动到详情头部。
 - 黑色毛玻璃与实体刘海无缝衔接，顶部直角、底部圆角。

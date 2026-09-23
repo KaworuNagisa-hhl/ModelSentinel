@@ -14,6 +14,7 @@ enum AIClientKind: String, Codable, Sendable {
     case windsurf
     case visualStudioCode
     case zed
+    case qoder
 }
 
 enum AIClientSurface: String, Codable, Sendable {
