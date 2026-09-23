@@ -114,9 +114,8 @@ struct IslandView: View {
 
             Spacer(minLength: 4)
 
-            Text(store.snapshot.confidence.percentText)
+            AnimatedPercentText(value: store.snapshot.confidence)
                 .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                .monospacedDigit()
                 .foregroundStyle(store.snapshot.health.color)
         }
         .padding(.horizontal, 12)
@@ -203,9 +202,8 @@ struct IslandView: View {
                     Text("来源可信度")
                         .font(.system(size: 8.5, weight: .medium))
                         .foregroundStyle(.secondary)
-                    Text(store.snapshot.confidence.percentText)
+                    AnimatedPercentText(value: store.snapshot.confidence)
                         .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .monospacedDigit()
                 }
                 Text(modelVerificationLabel)
                     .font(.system(size: 8.5, weight: .semibold))
@@ -479,9 +477,8 @@ private struct EvidenceBadge: View {
 
     var body: some View {
         VStack(spacing: 2) {
-            Text(metric.value.percentText)
+            AnimatedPercentText(value: metric.value)
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .monospacedDigit()
             HStack(spacing: 3) {
                 Circle()
                     .fill(metric.value >= 0.75 ? tint : .yellow)
