@@ -15,12 +15,31 @@ final class MonitorStore: ObservableObject {
     @Published var displayLayout = IslandDisplayLayout.standard
     @Published var isDetectingOrigin = false
     @Published private(set) var detectedClients: [AIClientDetection] = []
+    @Published private(set) var detectionMode: DetectionMode
 
     private var probeTask: Task<Void, Never>?
     private var detectedRoutes: [ClientRouteDetection] = []
     private var lastActiveProbeResult: ActiveProbeResult?
+    private let defaults = UserDefaults.standard
 
-    private init() {}
+    private enum Key {
+        static let detectionMode = "monitor.detectionMode"
+    }
+
+    private init() {
+        detectionMode = DetectionMode(
+            rawValue: defaults.string(forKey: Key.detectionMode) ?? ""
+        ) ?? .passive
+    }
+
+    func setDetectionMode(_ mode: DetectionMode) {
+        detectionMode = mode
+        defaults.set(mode.rawValue, forKey: Key.detectionMode)
+        if mode == .passive {
+            snapshot.note = "已切换为被动检测 · 不会额外发起模型请求"
+            snapshot.updatedAt = .now
+        }
+    }
 
     func togglePinnedExpansion() {
         if isExpanded {
@@ -97,6 +116,7 @@ final class MonitorStore: ObservableObject {
                 snapshot.updatedAt = .now
             }
             isDetectingOrigin = false
+            ProxyStore.shared.considerActiveMonitoring(snapshot: snapshot)
         }
     }
 
@@ -278,7 +298,7 @@ final class MonitorStore: ObservableObject {
 
     private var hasFreshActiveProbe: Bool {
         guard let result = lastActiveProbeResult else { return false }
-        return Date().timeIntervalSince(result.completedAt) < 30 * 60
+        return Date().timeIntervalSince(result.completedAt) < 6 * 60 * 60
     }
 
     private func applyDetectedRoute(_ route: ClientRouteDetection) {

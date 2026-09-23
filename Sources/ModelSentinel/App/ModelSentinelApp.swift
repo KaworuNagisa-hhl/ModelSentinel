@@ -39,9 +39,16 @@ struct ModelSentinelApp: App {
 
             Divider()
 
+            Text("检测模式：\(store.detectionMode.title)")
+            if store.detectionMode == .active {
+                Button("切换为被动检测（0 Token）") {
+                    store.setDetectionMode(.passive)
+                }
+            }
+
             Text("本地代理：\(proxyStore.runtimeState.label)")
             SettingsLink {
-                Text("代理与鉴别设置…")
+                Text(store.detectionMode == .active ? "主动监测设置…" : "检测模式与代理设置…")
             }
 
             Divider()
@@ -72,7 +79,7 @@ struct ModelSentinelApp: App {
         .menuBarExtraStyle(.menu)
 
         Settings {
-            ProxySettingsView(store: proxyStore)
+            ProxySettingsView(store: proxyStore, monitorStore: store)
         }
     }
 }

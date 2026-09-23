@@ -14,11 +14,14 @@ final class ProxyStore: ObservableObject {
 
     private let proxy = LocalResponseProxy()
     private let defaults = UserDefaults.standard
+    private let activeProbeCooldown: TimeInterval = 6 * 60 * 60
 
     private enum Key {
         static let enabled = "proxy.enabled"
         static let upstream = "proxy.upstreamBaseURL"
         static let port = "proxy.listenPort"
+        static let lastAutomaticProbeKey = "probe.lastAutomaticKey"
+        static let lastAutomaticProbeAt = "probe.lastAutomaticAt"
     }
 
     private init() {
@@ -67,10 +70,55 @@ final class ProxyStore: ObservableObject {
         NSPasteboard.general.setString(localBaseURL, forType: .string)
     }
 
-    func runActiveProbe() {
+    func runActiveProbeNow() {
+        let snapshot = MonitorStore.shared.snapshot
+        if supportsActiveProbe(snapshot: snapshot) {
+            recordAutomaticProbeAttempt(snapshot: snapshot)
+        }
+        runActiveProbe(snapshot: snapshot)
+    }
+
+    func considerActiveMonitoring(snapshot: RouteSnapshot) {
+        guard MonitorStore.shared.detectionMode == .active,
+              activeProbeState != .running,
+              supportsActiveProbe(snapshot: snapshot),
+              snapshot.modelDetails?.responseModelID == nil else { return }
+
+        let key = activeProbeKey(snapshot: snapshot)
+        let lastKey = defaults.string(forKey: Key.lastAutomaticProbeKey)
+        let lastDate = defaults.object(forKey: Key.lastAutomaticProbeAt) as? Date
+        if lastKey == key,
+           let lastDate,
+           Date().timeIntervalSince(lastDate) < activeProbeCooldown {
+            return
+        }
+
+        recordAutomaticProbeAttempt(snapshot: snapshot)
+        runActiveProbe(snapshot: snapshot)
+    }
+
+    func supportsActiveProbe(snapshot: RouteSnapshot) -> Bool {
+        snapshot.client?.kind == .codex
+    }
+
+    func activeProbeAvailability(snapshot: RouteSnapshot) -> String {
+        if supportsActiveProbe(snapshot: snapshot) {
+            return "当前 Codex 支持主动探针"
+        }
+        if let client = snapshot.client?.displayName {
+            return "\(client) 暂不支持独立主动探针"
+        }
+        return "请先启动受支持的客户端"
+    }
+
+    private func runActiveProbe(snapshot: RouteSnapshot) {
         guard activeProbeState != .running else { return }
+        guard supportsActiveProbe(snapshot: snapshot) else {
+            activeProbeState = .failed(activeProbeAvailability(snapshot: snapshot))
+            return
+        }
         activeProbeState = .running
-        let modelID = MonitorStore.shared.snapshot.modelDetails?.requestedModelID
+        let modelID = snapshot.modelDetails?.requestedModelID
         Task {
             do {
                 let result = try await ActiveProbeService.shared.run(modelID: modelID)
@@ -80,6 +128,18 @@ final class ProxyStore: ObservableObject {
                 activeProbeState = .failed(error.localizedDescription)
             }
         }
+    }
+
+    private func activeProbeKey(snapshot: RouteSnapshot) -> String {
+        let client = snapshot.client?.id ?? "unknown"
+        let model = snapshot.modelDetails?.requestedModelID ?? snapshot.claimedModel
+        let route = snapshot.origin?.host ?? snapshot.origin?.displayName ?? snapshot.provider
+        return [client, model, route].joined(separator: "|").lowercased()
+    }
+
+    private func recordAutomaticProbeAttempt(snapshot: RouteSnapshot) {
+        defaults.set(activeProbeKey(snapshot: snapshot), forKey: Key.lastAutomaticProbeKey)
+        defaults.set(Date(), forKey: Key.lastAutomaticProbeAt)
     }
 
     private func start() {

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct IslandView: View {
+    @Environment(\.openSettings) private var openSettings
     @ObservedObject var store: MonitorStore
     let onToggle: () -> Void
     let onHoverChange: (Bool) -> Void
@@ -408,6 +409,21 @@ struct IslandView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer(minLength: 4)
+            Button {
+                openSettings()
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: store.detectionMode.symbol)
+                    Text(store.detectionMode.compactTitle)
+                }
+                .font(.system(size: 8.5, weight: .semibold))
+                .foregroundStyle(store.detectionMode == .active ? .yellow : .secondary)
+                .padding(.horizontal, 6)
+                .frame(height: 18)
+                .background(.white.opacity(0.06), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .help("打开检测模式设置")
             Text(store.snapshot.updatedAt, style: .time)
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundStyle(.tertiary)
