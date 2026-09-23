@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPOSITORY="KaworuNagisa-hhl/ModelSentinel"
-VERSION="${MODEL_SENTINEL_VERSION:-0.2.0}"
+VERSION="${MODEL_SENTINEL_VERSION:-0.3.0}"
 INSTALL_DIRECTORY="${MODEL_SENTINEL_INSTALL_DIR:-$HOME/Applications}"
 ASSET_NAME="ModelSentinel-v${VERSION}-macOS-arm64.zip"
 RELEASE_BASE_URL="https://github.com/${REPOSITORY}/releases/download/v${VERSION}"

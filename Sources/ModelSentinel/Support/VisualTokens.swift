@@ -1,6 +1,17 @@
 import SwiftUI
 
 extension RouteHealth {
+    var compactIndicatorColor: Color {
+        switch self {
+        case .verified:
+            .green
+        case .configured, .probing, .warning:
+            .yellow
+        case .mismatch, .offline:
+            .red
+        }
+    }
+
     var color: Color {
         switch self {
         case .configured: .blue

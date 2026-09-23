@@ -29,6 +29,7 @@ struct EvidenceMetric: Identifiable, Codable, Hashable, Sendable {
 struct ModelIdentityDetails: Codable, Equatable, Sendable {
     var requestedModelID: String?
     var responseModelID: String?
+    var responseObserved: Bool? = nil
     var behavioralMatch: String?
     var reasoningEffort: String?
     var wireAPI: String?
@@ -71,7 +72,7 @@ struct RouteSnapshot: Codable, Equatable, Sendable {
         evidence: [
             EvidenceMetric(name: "客户端", value: 0),
             EvidenceMetric(name: "配置", value: 0),
-            EvidenceMetric(name: "线路", value: 0),
+            EvidenceMetric(name: "来源", value: 0),
             EvidenceMetric(name: "模型", value: 0)
         ]
     )

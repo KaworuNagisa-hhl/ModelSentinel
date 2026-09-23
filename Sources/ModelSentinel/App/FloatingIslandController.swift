@@ -4,14 +4,19 @@ import SwiftUI
 
 @MainActor
 final class FloatingIslandController: NSObject {
+    private static let expandedWidth: CGFloat = 372
+    private static let compactNotchOverlap: CGFloat = 8
+
     private let store: MonitorStore
     private let panel: NSPanel
     private let sensorPanel: NSPanel
     private let hoverSensor = NotchHoverSensorView(frame: .zero)
     private var cancellables = Set<AnyCancellable>()
     private var hoverTask: Task<Void, Never>?
+    private var frameAnimationTask: Task<Void, Never>?
     private var isSensorHovered = false
     private var isContentHovered = false
+    private var suppressesHoverExpansionUntilExit = false
     private let pinsExpandedForPreview = ProcessInfo.processInfo.arguments.contains("--expanded")
 
     private struct NotchGeometry {
@@ -19,6 +24,7 @@ final class FloatingIslandController: NSObject {
         let centerX: CGFloat
         let expandedTopY: CGFloat
         let sensorFrame: NSRect
+        let compactStatusFrame: NSRect
     }
 
     init(store: MonitorStore) {
@@ -36,13 +42,18 @@ final class FloatingIslandController: NSObject {
         hoverSensor.onHoverChange = { [weak self] inside in
             self?.handleSensorHover(inside)
         }
+        hoverSensor.onClick = { [weak self] in
+            self?.togglePinnedExpansion()
+        }
 
         let view = IslandView(
             store: store,
-            onToggle: { [weak self] in self?.toggleExpanded() },
+            onToggle: { [weak self] in self?.togglePinnedExpansion() },
             onHoverChange: { [weak self] inside in self?.handleContentHover(inside) }
         )
-        panel.contentView = NSHostingView(rootView: view)
+        let hostingView = NSHostingView(rootView: view)
+        hostingView.sizingOptions = []
+        panel.contentView = hostingView
 
         updatePresentation(animated: false)
         observeScreenChanges()
@@ -51,6 +62,7 @@ final class FloatingIslandController: NSObject {
 
     deinit {
         hoverTask?.cancel()
+        frameAnimationTask?.cancel()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -61,13 +73,20 @@ final class FloatingIslandController: NSObject {
 
     func hide() {
         store.isVisible = false
+        frameAnimationTask?.cancel()
         panel.orderOut(nil)
         sensorPanel.orderOut(nil)
     }
 
-    func toggleExpanded() {
+    func togglePinnedExpansion() {
         hoverTask?.cancel()
-        store.toggleExpanded()
+        let wasPinned = store.isExpansionPinned
+        store.togglePinnedExpansion()
+        if wasPinned && !store.isExpanded {
+            suppressesHoverExpansionUntilExit = isSensorHovered || isContentHovered
+        } else {
+            suppressesHoverExpansionUntilExit = false
+        }
     }
 
     func refresh() {
@@ -83,12 +102,12 @@ final class FloatingIslandController: NSObject {
         )
         panel.isOpaque = false
         panel.backgroundColor = .clear
+        panel.ignoresMouseEvents = false
         panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.hidesOnDeactivate = false
         panel.isMovable = false
         panel.isMovableByWindowBackground = false
-        panel.animationBehavior = .none
         return panel
     }
 
@@ -112,7 +131,8 @@ final class FloatingIslandController: NSObject {
             }
 
             guard store.isExpanded else {
-                panel.orderOut(nil)
+                setPanelFrame(notch.compactStatusFrame, animated: animated)
+                panel.orderFrontRegardless()
                 return
             }
 
@@ -129,15 +149,37 @@ final class FloatingIslandController: NSObject {
     }
 
     private func setPanelFrame(_ frame: NSRect, animated: Bool) {
+        frameAnimationTask?.cancel()
         guard animated, panel.isVisible else {
             panel.setFrame(frame, display: true)
             return
         }
 
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.3
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            panel.animator().setFrame(frame, display: true)
+        let start = panel.frame
+        guard start != frame else { return }
+        let frameCount = 24
+        frameAnimationTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            for step in 1...frameCount {
+                do {
+                    try await Task.sleep(for: .milliseconds(16))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                let progress = CGFloat(step) / CGFloat(frameCount)
+                let eased = progress < 0.5
+                    ? 4 * progress * progress * progress
+                    : 1 - pow(-2 * progress + 2, 3) / 2
+                let current = NSRect(
+                    x: start.origin.x + (frame.origin.x - start.origin.x) * eased,
+                    y: start.origin.y + (frame.origin.y - start.origin.y) * eased,
+                    width: start.width + (frame.width - start.width) * eased,
+                    height: start.height + (frame.height - start.height) * eased
+                )
+                panel.setFrame(current, display: true)
+            }
+            panel.setFrame(frame, display: true)
         }
     }
 
@@ -145,7 +187,7 @@ final class FloatingIslandController: NSObject {
         let height: CGFloat = store.displayLayout.isNotched
             ? 264 + store.displayLayout.compactHeight
             : 276
-        let size = NSSize(width: 372, height: height)
+        let size = NSSize(width: Self.expandedWidth, height: height)
         return NSRect(
             x: centerX - size.width / 2,
             y: top - size.height,
@@ -188,10 +230,12 @@ final class FloatingIslandController: NSObject {
         guard notchWidth > 40 else { return nil }
         let menuBarBottomY = screen.visibleFrame.maxY
         let sensorHeight = max(1, screen.frame.maxY - menuBarBottomY)
+        let compactLeftX = screen.frame.midX - Self.expandedWidth / 2
+        let compactStatusWidth = leftArea.maxX - compactLeftX + Self.compactNotchOverlap
         let layout = IslandDisplayLayout(
             isNotched: true,
             compactHeight: sensorHeight,
-            leftWingWidth: 0,
+            leftWingWidth: compactStatusWidth,
             notchGapWidth: notchWidth,
             rightWingWidth: 0
         )
@@ -201,9 +245,15 @@ final class FloatingIslandController: NSObject {
             centerX: screen.frame.midX,
             expandedTopY: screen.frame.maxY,
             sensorFrame: NSRect(
-                x: screen.frame.midX - notchWidth / 2,
+                x: compactLeftX,
                 y: menuBarBottomY,
-                width: notchWidth,
+                width: rightArea.minX - compactLeftX,
+                height: sensorHeight
+            ),
+            compactStatusFrame: NSRect(
+                x: compactLeftX,
+                y: menuBarBottomY,
+                width: layout.leftWingWidth,
                 height: sensorHeight
             )
         )
@@ -223,6 +273,12 @@ final class FloatingIslandController: NSObject {
         guard store.displayLayout.isNotched else { return }
         guard !pinsExpandedForPreview else { return }
         hoverTask?.cancel()
+
+        if suppressesHoverExpansionUntilExit {
+            guard !isSensorHovered, !isContentHovered else { return }
+            suppressesHoverExpansionUntilExit = false
+        }
+        guard !store.isExpansionPinned else { return }
 
         let shouldExpand = isSensorHovered || isContentHovered
         guard shouldExpand != store.isExpanded else { return }
@@ -273,6 +329,7 @@ final class FloatingIslandController: NSObject {
 
 private final class NotchHoverSensorView: NSView {
     var onHoverChange: ((Bool) -> Void)?
+    var onClick: (() -> Void)?
     private var trackingAreaReference: NSTrackingArea?
 
     override var isOpaque: Bool { false }
@@ -299,5 +356,13 @@ private final class NotchHoverSensorView: NSView {
 
     override func mouseExited(with event: NSEvent) {
         onHoverChange?(false)
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        onClick?()
     }
 }
