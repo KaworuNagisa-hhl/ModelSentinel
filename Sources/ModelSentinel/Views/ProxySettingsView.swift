@@ -52,7 +52,7 @@ struct ProxySettingsView: View {
 
             Section("主动能力探针") {
                 LabeledContent("探针状态", value: store.activeProbeState.label)
-                Text("仅在响应模型字段缺失或不可信时使用。探针通过同一 Codex 配置发送三个合成题目，会产生少量模型用量；只保存通过数量和耗时。")
+                Text("仅在响应模型字段缺失或不可信时使用。每次运行会额外占用 1 个 Codex 本地任务；只保存通过数量和耗时。")
                     .font(.callout)
                     .foregroundStyle(.secondary)
 
@@ -71,7 +71,7 @@ struct ProxySettingsView: View {
                 store.runActiveProbe()
             }
         } message: {
-            Text("将通过当前 Codex 线路发送三个合成测试题，并消耗少量模型额度。不会读取或保存你的对话、代码或凭据。")
+            Text("将额外执行 1 个 Codex 本地任务，并计入当前账号或中转站用量。Plus 额度紧张时建议取消，优先使用零额外用量的本地响应代理。不会读取或保存你的对话、代码或凭据。")
         }
     }
 }
